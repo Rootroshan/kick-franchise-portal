@@ -25,7 +25,7 @@ DROP POLICY IF EXISTS tenant_rw ON "Tenant";
 CREATE POLICY tenant_rw ON "Tenant"
   USING (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
-    OR "id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    OR "id" = NULLIF(current_setting('app.tenant_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
@@ -41,7 +41,7 @@ DROP POLICY IF EXISTS custom_domain_franchisor_read ON "CustomDomain";
 CREATE POLICY custom_domain_franchisor_read ON "CustomDomain" FOR SELECT
   USING (
     current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-    AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
   );
 
 ALTER TABLE "Location" ENABLE ROW LEVEL SECURITY;
@@ -50,13 +50,13 @@ DROP POLICY IF EXISTS location_rw ON "Location";
 CREATE POLICY location_rw ON "Location"
   USING (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
-    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   );
 
@@ -69,7 +69,7 @@ CREATE POLICY membership_kick ON "Membership" FOR ALL
 DROP POLICY IF EXISTS membership_tenant_read ON "Membership";
 CREATE POLICY membership_tenant_read ON "Membership" FOR SELECT
   USING (
-    "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     AND current_setting('app.user_role', true) IN ('FRANCHISOR_ADMIN', 'FRANCHISEE_USER')
   );
 DROP POLICY IF EXISTS membership_self_read ON "Membership";
@@ -86,13 +86,13 @@ DROP POLICY IF EXISTS announcement_rw ON "Announcement";
 CREATE POLICY announcement_rw ON "Announcement"
   USING (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
-    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   );
 
@@ -105,7 +105,7 @@ CREATE POLICY announcement_ack_rw ON "AnnouncementAck"
     OR EXISTS (
       SELECT 1 FROM "Announcement" a
       WHERE a.id = "AnnouncementAck"."announcementId"
-        AND a."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+        AND a."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   )
   WITH CHECK (
@@ -128,21 +128,21 @@ CREATE POLICY asset_kick_franchisor ON "Asset"
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   );
 DROP POLICY IF EXISTS asset_franchisee_read ON "Asset";
 CREATE POLICY asset_franchisee_read ON "Asset" FOR SELECT
   USING (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     AND status = 'ACTIVE'
   );
 
@@ -156,13 +156,13 @@ DROP POLICY IF EXISTS task_rw ON "Task";
 CREATE POLICY task_rw ON "Task"
   USING (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
-    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   );
 
@@ -177,7 +177,7 @@ CREATE POLICY task_assignment_kick_franchisor ON "TaskAssignment"
       AND EXISTS (
         SELECT 1 FROM "Task" t
         WHERE t.id = "TaskAssignment"."taskId"
-          AND t."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+          AND t."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
       )
     )
   )
@@ -189,11 +189,11 @@ DROP POLICY IF EXISTS task_assignment_franchisee ON "TaskAssignment";
 CREATE POLICY task_assignment_franchisee ON "TaskAssignment"
   USING (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
   );
 
 -- ============================================================================
@@ -206,13 +206,13 @@ DROP POLICY IF EXISTS onboarding_template_rw ON "OnboardingTemplate";
 CREATE POLICY onboarding_template_rw ON "OnboardingTemplate"
   USING (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
-    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+    OR "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   );
 
@@ -225,7 +225,7 @@ CREATE POLICY onboarding_item_rw ON "OnboardingItem"
     OR EXISTS (
       SELECT 1 FROM "OnboardingTemplate" t
       WHERE t.id = "OnboardingItem"."templateId"
-        AND t."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+        AND t."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
     )
   )
   WITH CHECK (
@@ -244,7 +244,7 @@ CREATE POLICY onboarding_progress_kick_franchisor_read ON "OnboardingProgress" F
       AND EXISTS (
         SELECT 1 FROM "Location" l
         WHERE l.id = "OnboardingProgress"."locationId"
-          AND l."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+          AND l."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
       )
     )
   );
@@ -252,11 +252,11 @@ DROP POLICY IF EXISTS onboarding_progress_franchisee ON "OnboardingProgress";
 CREATE POLICY onboarding_progress_franchisee ON "OnboardingProgress"
   USING (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
   )
   WITH CHECK (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
   );
 DROP POLICY IF EXISTS onboarding_progress_kick_write ON "OnboardingProgress";
 CREATE POLICY onboarding_progress_kick_write ON "OnboardingProgress" FOR INSERT
@@ -278,7 +278,7 @@ CREATE POLICY product_read ON "Product" FOR SELECT
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
       AND active = true
     )
     -- FRANCHISOR_ADMIN intentionally absent: zero visibility.
@@ -306,7 +306,7 @@ CREATE POLICY variant_read ON "ProductVariant" FOR SELECT
       AND EXISTS (
         SELECT 1 FROM "Product" p
         WHERE p.id = "ProductVariant"."productId"
-          AND p."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+          AND p."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
           AND p.active = true
       )
     )
@@ -332,7 +332,7 @@ DROP POLICY IF EXISTS ordering_rule_franchisee_read ON "LocationOrderingRule";
 CREATE POLICY ordering_rule_franchisee_read ON "LocationOrderingRule" FOR SELECT
   USING (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
   );
 
 ALTER TABLE "Order" ENABLE ROW LEVEL SECURITY;
@@ -343,7 +343,7 @@ CREATE POLICY order_access ON "Order"
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-      AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+      AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
     )
     -- FRANCHISOR_ADMIN intentionally absent: zero visibility into orders.
   )
@@ -351,7 +351,7 @@ CREATE POLICY order_access ON "Order"
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-      AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+      AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
     )
   );
 
@@ -366,7 +366,7 @@ CREATE POLICY order_line_access ON "OrderLine"
       AND EXISTS (
         SELECT 1 FROM "Order" o
         WHERE o.id = "OrderLine"."orderId"
-          AND o."locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+          AND o."locationId" = NULLIF(current_setting('app.location_id', true), '')
       )
     )
   )
@@ -389,7 +389,25 @@ DROP POLICY IF EXISTS allowance_self_read ON "Allowance";
 CREATE POLICY allowance_self_read ON "Allowance" FOR SELECT
   USING (
     current_setting('app.user_role', true) = 'FRANCHISEE_USER'
-    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
+  );
+-- Checkout (src/server/modules/commerce/checkout.ts) runs SELECT ... FOR UPDATE
+-- on the location's own Allowance row while in a FRANCHISEE_USER session, to
+-- serialize concurrent checkouts. Postgres RLS requires a row to satisfy an
+-- UPDATE-eligible policy for FOR UPDATE locking to succeed, even though no
+-- actual UPDATE statement runs — the balance itself is still only ever
+-- changed via the append-only AllowanceLedger, never a direct column write.
+-- WITH CHECK repeats the same predicate so a franchisee session cannot use
+-- this policy to smuggle in an actual row mutation beyond locking it.
+DROP POLICY IF EXISTS allowance_self_lock ON "Allowance";
+CREATE POLICY allowance_self_lock ON "Allowance" FOR UPDATE
+  USING (
+    current_setting('app.user_role', true) = 'FRANCHISEE_USER'
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
+  )
+  WITH CHECK (
+    current_setting('app.user_role', true) = 'FRANCHISEE_USER'
+    AND "locationId" = NULLIF(current_setting('app.location_id', true), '')
   );
 
 ALTER TABLE "AllowanceLedger" ENABLE ROW LEVEL SECURITY;
@@ -405,7 +423,7 @@ CREATE POLICY allowance_ledger_self_read ON "AllowanceLedger" FOR SELECT
     AND EXISTS (
       SELECT 1 FROM "Allowance" a
       WHERE a.id = "AllowanceLedger"."allowanceId"
-        AND a."locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+        AND a."locationId" = NULLIF(current_setting('app.location_id', true), '')
     )
   );
 -- Franchisee sessions may INSERT a ledger debit ONLY via the checkout transaction,
@@ -421,7 +439,7 @@ CREATE POLICY allowance_ledger_self_insert_debit ON "AllowanceLedger" FOR INSERT
     AND EXISTS (
       SELECT 1 FROM "Allowance" a
       WHERE a.id = "AllowanceLedger"."allowanceId"
-        AND a."locationId" = NULLIF(current_setting('app.location_id', true), '')::uuid
+        AND a."locationId" = NULLIF(current_setting('app.location_id', true), '')
     )
   );
 
@@ -473,9 +491,17 @@ CREATE POLICY audit_log_kick_read ON "AuditLog" FOR SELECT
     current_setting('app.user_role', true) = 'KICK_ADMIN'
     OR (
       current_setting('app.user_role', true) = 'FRANCHISOR_ADMIN'
-      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid
+      AND "tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
       AND entity NOT IN ('Product', 'ProductVariant', 'Order', 'OrderLine', 'Allowance', 'AllowanceLedger', 'RebateRule', 'RebateAccrual', 'LocationOrderingRule')
     )
+    -- Actor can read back the row they just wrote — required because Postgres
+    -- RLS subjects INSERT...RETURNING to the SELECT policy too, and every
+    -- writeAuditLog() call (including from FRANCHISEE_USER contexts like
+    -- checkout) uses Prisma's .create(), which always issues RETURNING.
+    -- This does NOT grant general audit-log browsing to franchisees/franchisors
+    -- beyond their own actor id; it only unblocks the RETURNING clause for
+    -- their own insert.
+    OR "actorId" = current_setting('app.user_id', true)
   );
 -- Audit logs are insert-only from the trusted server context; never updatable/deletable
 -- via the app role at all (no UPDATE/DELETE policy exists -> both denied outright).

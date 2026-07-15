@@ -1,23 +1,31 @@
-import { prisma } from "@/server/db/client";
-import type { Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 
 /**
  * Writes an immutable audit record for a privileged action. AuditLog has no
  * UPDATE/DELETE policy in RLS (see prisma/rls.sql) — rows can only ever be
  * inserted, never edited or removed via the application role.
+ *
+ * MUST be called with the `tx` from the enclosing withTenant() transaction,
+ * never the top-level `prisma` singleton — a separate connection has no
+ * session GUCs set (they're transaction-local via SET LOCAL) and RLS will
+ * reject the insert, or worse, it can race against the still-uncommitted
+ * rows the audit entry references.
  */
-export async function writeAuditLog(entry: {
-  tenantId: string | null;
-  actorId: string;
-  role: Role;
-  action: string;
-  entity: string;
-  entityId?: string | null;
-  before?: unknown;
-  after?: unknown;
-  ip?: string | null;
-}) {
-  await prisma.auditLog.create({
+export async function writeAuditLog(
+  tx: Prisma.TransactionClient,
+  entry: {
+    tenantId: string | null;
+    actorId: string;
+    role: Role;
+    action: string;
+    entity: string;
+    entityId?: string | null;
+    before?: unknown;
+    after?: unknown;
+    ip?: string | null;
+  }
+) {
+  await tx.auditLog.create({
     data: {
       tenantId: entry.tenantId,
       actorId: entry.actorId,

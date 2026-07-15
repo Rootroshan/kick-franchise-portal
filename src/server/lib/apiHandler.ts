@@ -1,8 +1,8 @@
-import type { ZodSchema } from "zod";
+import type { ZodType } from "zod";
 import { HttpError, toErrorResponse } from "@/server/modules/identity/errors";
 
 /** Parses and validates a JSON request body against a Zod schema. Throws a typed 400 on failure. */
-export async function parseJsonBody<T>(req: Request, schema: ZodSchema<T>): Promise<T> {
+export async function parseJsonBody<Output>(req: Request, schema: ZodType<Output, any, any>): Promise<Output> {
   let body: unknown;
   try {
     body = await req.json();
@@ -16,7 +16,7 @@ export async function parseJsonBody<T>(req: Request, schema: ZodSchema<T>): Prom
   return result.data;
 }
 
-export function parseSearchParams<T>(url: string, schema: ZodSchema<T>): T {
+export function parseSearchParams<Output>(url: string, schema: ZodType<Output, any, any>): Output {
   const { searchParams } = new URL(url);
   const obj = Object.fromEntries(searchParams.entries());
   const result = schema.safeParse(obj);
