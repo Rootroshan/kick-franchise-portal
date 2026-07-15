@@ -1,9 +1,14 @@
+import * as Sentry from "@sentry/node";
 import { Worker, type Job } from "bullmq";
 import { getQueue, redisConnection, QUEUE_NAME } from "./queue";
 import { publishScheduledAnnouncements, expireAnnouncements } from "./jobs/announcements";
 import { sendOverdueTaskReminders } from "./jobs/tasks";
 import { runMonthlyRebateReports, runQuarterlyRebateReports } from "./jobs/rebates";
 import { cleanupDeadSubscriptions } from "./jobs/push";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN, tracesSampleRate: 0.1 });
+}
 
 type JobName =
   | "announcements.publish"
@@ -43,6 +48,7 @@ async function main() {
   });
   worker.on("failed", (job, err) => {
     console.error(`[worker] ${job?.name} failed:`, err);
+    Sentry.captureException(err, { tags: { job: job?.name } });
   });
 
   const queue = getQueue();

@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DATABASE_URL: postgresql://kick_ci:kickci@localhost:5432/kick_ci?sslmode=disable
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/kick_ci?sslmode=disable
+  APP_BASE_DOMAIN: portal.kickmedia.test
+  STRIPE_SECRET_KEY: sk_test_ci_placeholder
+  STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
+  CLERK_SECRET_KEY: sk_test_ci_placeholder
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
+  CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
+  RESEND_API_KEY: ""
+  VAPID_PUBLIC_KEY: ""
+  VAPID_PRIVATE_KEY: ""
+  REDIS_URL: redis://localhost:6379
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kick_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create non-superuser app role (mirrors production RLS setup)
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE ROLE kick_ci LOGIN PASSWORD 'kickci' NOSUPERUSER NOBYPASSRLS;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d kick_ci -c "GRANT ALL ON SCHEMA public TO kick_ci;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d kick_ci -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO kick_ci;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d kick_ci -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO kick_ci;"
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint (includes franchisor import-boundary rule)
+        run: npm run lint
+
+      - name: Apply migrations (privileged connection)
+        run: npx prisma migrate deploy
+
+      - name: Apply RLS policies
+        run: npm run rls:apply
+
+      - name: Verify RLS (app role cannot bypass RLS; every table has RLS + policies)
+        run: npm run rls:verify
+
+      - name: Unit + integration tests (includes money suite and lockout suite)
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  # Deployment is intentionally gated behind the `test` job succeeding.
+  # Vercel/Railway deploy hooks should be configured to trigger only on a
+  # green main-branch run of this workflow (see spec §19).
+  deploy-gate:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: All checks passed — deployment authorized
+        run: echo "Lockout suite, money suite, migration validation, and RLS validation all passed. Safe to deploy."

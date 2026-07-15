@@ -1,0 +1,56 @@
+name: Deploy
+
+# Deployment is gated behind CI passing (typecheck, lint, import-boundary
+# rule, unit/lockout/money tests, build, migration + RLS validation — see
+# ci.yml) via `workflow_run`. Vercel handles the Next.js app; the worker
+# deploys to Railway/Render via their own git-integration deploy hooks,
+# which should independently be configured to require this same CI check.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy-app:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (production)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod"
+
+      - name: Run production migrations
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Apply RLS policies
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: npm ci && npm run rls:apply
+
+      - name: Verify RLS in production
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: npm run rls:verify
+
+      - name: Smoke test production
+        env:
+          SMOKE_BASE_URL: ${{ secrets.PRODUCTION_APP_URL }}
+        run: npm run smoke-test
+
+  # The worker process (BullMQ jobs) is a separate deployable per the tech
+  # spec (Railway/Render, not Vercel). Configure that platform's own
+  # git-integration deploy hook to trigger on main, gated on this same CI
+  # workflow succeeding — no additional job needed here beyond documenting
+  # the requirement, since Railway/Render deploys are managed outside GitHub
+  # Actions once the hook is configured in their dashboards.

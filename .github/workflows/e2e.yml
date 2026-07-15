@@ -1,0 +1,85 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kick_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+
+    env:
+      DATABASE_URL: postgresql://kick_ci:kickci@localhost:5432/kick_ci?sslmode=disable
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/kick_ci?sslmode=disable
+      APP_BASE_DOMAIN: portal.kickmedia.test
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
+      REDIS_URL: redis://localhost:6379
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+      # Real Clerk test-mode credentials + seeded fixture user passwords are
+      # required for the golden-path/lockout specs to actually run instead
+      # of skipping (see tests/e2e/README.md). Configure as repo secrets once
+      # a Clerk test application exists; specs self-skip until then.
+      E2E_KICK_ADMIN_PASSWORD: ${{ secrets.E2E_KICK_ADMIN_PASSWORD }}
+      E2E_FRANCHISOR_PASSWORD: ${{ secrets.E2E_FRANCHISOR_PASSWORD }}
+      E2E_FRANCHISEE_PASSWORD: ${{ secrets.E2E_FRANCHISEE_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Create non-superuser app role
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE ROLE kick_ci LOGIN PASSWORD 'kickci' NOSUPERUSER NOBYPASSRLS;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d kick_ci -c "GRANT ALL ON SCHEMA public TO kick_ci;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d kick_ci -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO kick_ci;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d kick_ci -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO kick_ci;"
+
+      - name: Apply migrations + RLS
+        run: |
+          npx prisma migrate deploy
+          npm run rls:apply
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Playwright tests
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
