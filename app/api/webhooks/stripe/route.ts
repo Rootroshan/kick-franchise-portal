@@ -1,5 +1,5 @@
 import { stripeClient } from "@/server/lib/stripe";
-import { prisma } from "@/server/db/client";
+import { withTenant, systemKickContext } from "@/server/db/withTenant";
 import { getEnv } from "@/lib/env";
 import { markOrderPaid, markOrderFailed, refundOrder, getOrderByPaymentIntentId } from "@/server/modules/commerce/orderLifecycle";
 import type Stripe from "stripe";
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   }
 
   // Idempotent dedupe: if we've already processed this event id, ack and exit.
-  const already = await prisma.processedStripeEvent.findUnique({ where: { id: event.id } });
+  const already = await withTenant(systemKickContext(), (tx) => tx.processedStripeEvent.findUnique({ where: { id: event.id } }));
   if (already) {
     return Response.json({ received: true, duplicate: true });
   }
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         break; // ignore other event types
     }
 
-    await prisma.processedStripeEvent.create({ data: { id: event.id, type: event.type } });
+    await withTenant(systemKickContext(), (tx) => tx.processedStripeEvent.create({ data: { id: event.id, type: event.type } }));
     return Response.json({ received: true });
   } catch (err) {
     console.error(`Error processing Stripe webhook ${event.id} (${event.type}):`, err);

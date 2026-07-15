@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db/client";
+import { withTenant, systemKickContext } from "@/server/db/withTenant";
 import type { Role } from "@prisma/client";
 
 /**
@@ -6,6 +6,11 @@ import type { Role } from "@prisma/client";
  * Called from the Clerk webhook (user/org membership events) and from an
  * admin-driven invite flow. RLS reads role/tenant/location from this mirror
  * via request context — never from Clerk metadata directly on each query.
+ *
+ * Runs with system/KICK_ADMIN authority: Membership has FORCE ROW LEVEL
+ * SECURITY and only KICK_ADMIN may INSERT/UPDATE it directly (franchisee/
+ * franchisor mirroring is Kick-controlled, driven by the webhook, not
+ * self-service).
  */
 export async function upsertMembership(input: {
   clerkUserId: string;
@@ -15,33 +20,35 @@ export async function upsertMembership(input: {
   displayName?: string | null;
   email?: string | null;
 }) {
-  return prisma.membership.upsert({
-    where: {
-      clerkUserId_tenantId: {
-        clerkUserId: input.clerkUserId,
-        tenantId: input.tenantId ?? "",
+  return withTenant(systemKickContext(), (tx) =>
+    tx.membership.upsert({
+      where: {
+        clerkUserId_tenantId: {
+          clerkUserId: input.clerkUserId,
+          tenantId: input.tenantId ?? "",
+        },
       },
-    },
-    create: {
-      clerkUserId: input.clerkUserId,
-      tenantId: input.tenantId,
-      locationId: input.locationId,
-      role: input.role,
-      displayName: input.displayName ?? null,
-      email: input.email ?? null,
-    },
-    update: {
-      locationId: input.locationId,
-      role: input.role,
-      displayName: input.displayName ?? undefined,
-      email: input.email ?? undefined,
-    },
-  });
+      create: {
+        clerkUserId: input.clerkUserId,
+        tenantId: input.tenantId,
+        locationId: input.locationId,
+        role: input.role,
+        displayName: input.displayName ?? null,
+        email: input.email ?? null,
+      },
+      update: {
+        locationId: input.locationId,
+        role: input.role,
+        displayName: input.displayName ?? undefined,
+        email: input.email ?? undefined,
+      },
+    })
+  );
 }
 
 export async function removeMembership(clerkUserId: string, tenantId: string | null) {
-  await prisma.membership
-    .delete({
+  await withTenant(systemKickContext(), (tx) =>
+    tx.membership.delete({
       where: {
         clerkUserId_tenantId: {
           clerkUserId,
@@ -49,7 +56,7 @@ export async function removeMembership(clerkUserId: string, tenantId: string | n
         },
       },
     })
-    .catch(() => {
-      // Already absent — idempotent.
-    });
+  ).catch(() => {
+    // Already absent — idempotent.
+  });
 }

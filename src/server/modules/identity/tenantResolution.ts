@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db/client";
+import { withTenant, systemKickContext } from "@/server/db/withTenant";
 import { HttpError } from "./errors";
 
 export type ResolvedTenant = {
@@ -24,7 +24,10 @@ export async function resolveTenantFromHost(host: string): Promise<ResolvedTenan
   if (baseDomain && hostname.endsWith(`.${baseDomain}`)) {
     const slug = hostname.slice(0, -(`.${baseDomain}`.length));
     if (slug && !slug.includes(".")) {
-      const tenant = await prisma.tenant.findUnique({ where: { slug } });
+      // Runs before any role/tenant context is known (this IS how tenant is
+      // resolved), so it must use system/KICK_ADMIN authority to pass RLS —
+      // Tenant has FORCE ROW LEVEL SECURITY with no anonymous-read policy.
+      const tenant = await withTenant(systemKickContext(), (tx) => tx.tenant.findUnique({ where: { slug } }));
       if (tenant && tenant.status === "active") {
         return { id: tenant.id, slug: tenant.slug, name: tenant.name, theme: tenant.theme, status: tenant.status };
       }
@@ -33,10 +36,12 @@ export async function resolveTenantFromHost(host: string): Promise<ResolvedTenan
   }
 
   // Custom domain match — must be VERIFIED to resolve.
-  const custom = await prisma.customDomain.findUnique({
-    where: { hostname },
-    include: { tenant: true },
-  });
+  const custom = await withTenant(systemKickContext(), (tx) =>
+    tx.customDomain.findUnique({
+      where: { hostname },
+      include: { tenant: true },
+    })
+  );
   if (custom && custom.status === "VERIFIED" && custom.tenant.status === "active") {
     return {
       id: custom.tenant.id,

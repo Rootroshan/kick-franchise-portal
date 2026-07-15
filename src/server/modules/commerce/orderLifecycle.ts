@@ -1,4 +1,3 @@
-import { prisma } from "@/server/db/client";
 import { systemKickContext, withTenant } from "@/server/db/withTenant";
 import { accrueRebatesForOrder } from "@/server/modules/rebates/accrual";
 import { appendLedgerCredit } from "@/server/modules/allowances/ledger";
@@ -127,5 +126,5 @@ export async function refundOrder(orderId: string, refundAmountCents: number, ac
 }
 
 export async function getOrderByPaymentIntentId(paymentIntentId: string) {
-  return prisma.order.findUnique({ where: { stripePaymentIntentId: paymentIntentId } });
+  return withTenant(systemKickContext(), (tx) => tx.order.findUnique({ where: { stripePaymentIntentId: paymentIntentId } }));
 }

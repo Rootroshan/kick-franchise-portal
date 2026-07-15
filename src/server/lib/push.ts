@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { getEnv } from "@/lib/env";
-import { prisma } from "@/server/db/client";
+import { withTenant, systemKickContext } from "@/server/db/withTenant";
 import { sendEmail } from "./email";
 
 let configured = false;
@@ -32,7 +32,7 @@ export async function sendPushToSubscription(
   emailFallback?: { to: string; subject: string; html: string }
 ): Promise<{ ok: boolean; dead: boolean }> {
   ensureConfigured();
-  const sub = await prisma.pushSubscription.findUnique({ where: { id: subscriptionId } });
+  const sub = await withTenant(systemKickContext(), (tx) => tx.pushSubscription.findUnique({ where: { id: subscriptionId } }));
   if (!sub) return { ok: false, dead: true };
 
   try {
@@ -43,18 +43,22 @@ export async function sendPushToSubscription(
       },
       JSON.stringify(payload)
     );
-    await prisma.pushSubscription.update({ where: { id: sub.id }, data: { status: "SENT", lastError: null } });
+    await withTenant(systemKickContext(), (tx) =>
+      tx.pushSubscription.update({ where: { id: sub.id }, data: { status: "SENT", lastError: null } })
+    );
     return { ok: true, dead: false };
   } catch (err: unknown) {
     const statusCode = (err as { statusCode?: number })?.statusCode;
     const isDead = statusCode === 404 || statusCode === 410;
-    await prisma.pushSubscription.update({
-      where: { id: sub.id },
-      data: {
-        status: isDead ? "DEAD" : "FAILED",
-        lastError: err instanceof Error ? err.message : String(err),
-      },
-    });
+    await withTenant(systemKickContext(), (tx) =>
+      tx.pushSubscription.update({
+        where: { id: sub.id },
+        data: {
+          status: isDead ? "DEAD" : "FAILED",
+          lastError: err instanceof Error ? err.message : String(err),
+        },
+      })
+    );
     if (emailFallback) {
       await sendEmail(emailFallback);
     }
@@ -63,6 +67,6 @@ export async function sendPushToSubscription(
 }
 
 export async function pruneDeadSubscriptions(): Promise<number> {
-  const result = await prisma.pushSubscription.deleteMany({ where: { status: "DEAD" } });
+  const result = await withTenant(systemKickContext(), (tx) => tx.pushSubscription.deleteMany({ where: { status: "DEAD" } }));
   return result.count;
 }

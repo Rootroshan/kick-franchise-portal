@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
-import { prisma } from "@/server/db/client";
 import { HttpError } from "@/server/modules/identity/errors";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { lockAllowanceForUpdate, computeAllowanceBalance, appendLedgerDebit } from "@/server/modules/allowances/ledger";
@@ -51,22 +50,11 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
   }
   const locationId = ctx.locationId;
 
-  // Idempotency check performed first, outside the heavy transaction, for fast-path replay.
-  const existing = await prisma.order.findUnique({ where: { idempotencyKey: req.idempotencyKey } });
-  if (existing) {
-    return {
-      orderId: existing.id,
-      status: existing.status,
-      subtotalCents: existing.subtotalCents,
-      allowanceAppliedCents: existing.allowanceAppliedCents,
-      cardChargedCents: existing.cardChargedCents,
-      clientSecret: null, // replay: client already has the original secret if a card step was needed
-    };
-  }
-
   return withTenant(ctx, async (tx) => {
-    // Re-check idempotency inside the transaction to close the race between the
-    // pre-check above and this write.
+    // Idempotency check: a retried/duplicated request with the same key
+    // returns the original order rather than double charging or debiting.
+    // Must run through tx (not the bare prisma client) — Order has FORCE
+    // ROW LEVEL SECURITY and this needs the transaction's session GUCs.
     const raced = await tx.order.findUnique({ where: { idempotencyKey: req.idempotencyKey } });
     if (raced) {
       return {

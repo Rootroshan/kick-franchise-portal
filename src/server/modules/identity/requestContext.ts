@@ -1,7 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
-import { prisma } from "@/server/db/client";
-import type { RequestContext } from "@/server/db/withTenant";
+import { withTenant, systemKickContext, type RequestContext } from "@/server/db/withTenant";
 import { resolveTenantFromHost } from "./tenantResolution";
 import { HttpError } from "./errors";
 
@@ -28,8 +27,11 @@ export async function getRequestContext(): Promise<RequestContext> {
   const resolvedTenant = await resolveTenantFromHost(host);
 
   // A user may hold at most one membership per tenant, plus optionally one
-  // cross-tenant KICK_ADMIN membership (tenantId null).
-  const memberships = await prisma.membership.findMany({ where: { clerkUserId: userId } });
+  // cross-tenant KICK_ADMIN membership (tenantId null). Runs before role/
+  // tenant context is known (this IS how we determine it), so it must use
+  // system/KICK_ADMIN authority — Membership has FORCE ROW LEVEL SECURITY
+  // and no anonymous-read policy.
+  const memberships = await withTenant(systemKickContext(), (tx) => tx.membership.findMany({ where: { clerkUserId: userId } }));
 
   const kickAdminMembership = memberships.find((m) => m.role === "KICK_ADMIN" && m.tenantId === null);
   if (kickAdminMembership) {
