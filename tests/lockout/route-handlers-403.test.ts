@@ -31,6 +31,8 @@ import * as allowancesIndex from "@/app/api/allowances/route";
 import * as allowancesUsageReport from "@/app/api/allowances/usage-report/route";
 import * as rebatesRules from "@/app/api/rebates/rules/route";
 import * as rebatesReports from "@/app/api/rebates/reports/route";
+import * as rebatesReportDownload from "@/app/api/rebates/reports/[id]/download/route";
+import * as allowancesMe from "@/app/api/allowances/me/route";
 
 type RouteModule = Record<string, ((req: Request) => Promise<Response>) | undefined>;
 
@@ -51,6 +53,13 @@ const PROTECTED_ROUTES: Array<{ name: string; method: "GET" | "POST" | "PATCH"; 
   { name: "rebates/rules GET", method: "GET", mod: rebatesRules as RouteModule, path: "/api/rebates/rules" },
   { name: "rebates/rules POST", method: "POST", mod: rebatesRules as RouteModule, path: "/api/rebates/rules" },
   { name: "rebates/reports GET", method: "GET", mod: rebatesReports as RouteModule, path: "/api/rebates/reports" },
+  {
+    name: "rebates/reports/:id/download GET",
+    method: "GET",
+    mod: rebatesReportDownload as RouteModule,
+    path: "/api/rebates/reports/00000000-0000-0000-0000-000000000000/download?format=csv",
+  },
+  { name: "allowances/me GET (franchisor is not a franchisee)", method: "GET", mod: allowancesMe as RouteModule, path: "/api/allowances/me" },
 ];
 
 function makeRequest(method: string, path: string, body?: unknown): Request {
