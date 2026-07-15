@@ -1,0 +1,551 @@
+// Kick Franchise Portal — Prisma schema
+// Money is always integer minor units (cents). Never floats.
+// Every tenant-owned row carries tenantId. RLS (prisma/rls.sql) enforces isolation
+// at the database layer; this schema alone is not the security boundary.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  KICK_ADMIN
+  FRANCHISOR_ADMIN
+  FRANCHISEE_USER
+}
+
+enum AssetStatus {
+  ACTIVE
+  ARCHIVED
+  DEPRECATED
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  EXPIRED
+}
+
+enum TaskStatus {
+  OPEN
+  COMPLETED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FULFILLED
+  FAILED
+}
+
+enum RebateType {
+  FLAT
+  PERCENT
+}
+
+enum OverflowBehavior {
+  BLOCK
+  CHARGE_CARD
+}
+
+enum LedgerReason {
+  GRANT
+  ORDER_DEBIT
+  REFUND_CREDIT
+  ADJUSTMENT
+  EXPIRY
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum RebateReportPeriod {
+  MONTHLY
+  QUARTERLY
+}
+
+enum PushDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  DEAD
+}
+
+// ---------- Tenancy ----------
+
+model Tenant {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique // brandx -> brandx.portal.kickmedia.com
+  status       String   @default("active")
+  theme        Json     @default("{}") // { logoUrl, primary, secondary, font }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  locations           Location[]
+  memberships         Membership[]
+  announcements       Announcement[]
+  assets              Asset[]
+  tasks               Task[]
+  onboardingTemplates OnboardingTemplate[]
+  products            Product[]
+  rebateRules         RebateRule[]
+  rebateReports       RebateReport[]
+  auditLogs           AuditLog[]
+  customDomains       CustomDomain[]
+  pushSubscriptions   PushSubscription[]
+  allowances          Allowance[]
+  orders              Order[]
+  rebateAccruals      RebateAccrual[]
+
+  @@index([status])
+}
+
+model CustomDomain {
+  id            String       @id @default(uuid())
+  tenantId      String
+  hostname      String       @unique
+  status        DomainStatus @default(PENDING)
+  verificationToken String
+  verifiedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Location {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  address       String?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships         Membership[]
+  orders              Order[]
+  allowances          Allowance[]
+  orderingRules       LocationOrderingRule[]
+  onboardingProgress  OnboardingProgress[]
+  taskAssignments     TaskAssignment[]
+  announcementAcks    AnnouncementAck[]
+
+  @@index([tenantId])
+}
+
+model Membership {
+  id          String    @id @default(uuid())
+  clerkUserId String
+  tenantId    String?
+  locationId  String?
+  role        Role
+  displayName String?
+  email       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@unique([clerkUserId, tenantId])
+  @@index([tenantId])
+  @@index([clerkUserId])
+}
+
+// ---------- Communication: Announcements ----------
+
+model Announcement {
+  id          String             @id @default(uuid())
+  tenantId    String
+  title       String
+  body        String
+  isPinned    Boolean            @default(false)
+  publishAt   DateTime?
+  expiresAt   DateTime?
+  requiresAck Boolean            @default(false)
+  status      AnnouncementStatus @default(DRAFT)
+  createdBy   String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  acks   AnnouncementAck[]
+
+  @@index([tenantId, status, isPinned])
+  @@index([tenantId, publishAt])
+  @@index([tenantId, expiresAt])
+}
+
+model AnnouncementAck {
+  id             String   @id @default(uuid())
+  announcementId String
+  clerkUserId    String
+  locationId     String?
+  acknowledgedAt DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@unique([announcementId, clerkUserId])
+  @@index([announcementId])
+}
+
+// ---------- Brand Asset Hub ----------
+
+model Asset {
+  id         String      @id @default(uuid())
+  tenantId   String
+  name       String
+  type       String // logo | signage | menuboard | campaign | template
+  category   String?
+  storageKey String // R2 object key
+  mime       String
+  sizeBytes  Int
+  version    Int         @default(1)
+  replacesId String? // previous version's Asset.id, for version history
+  status     AssetStatus @default(ACTIVE)
+  createdBy  String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+}
+
+// ---------- Tasks ----------
+
+model Task {
+  id        String    @id @default(uuid())
+  tenantId  String
+  title     String
+  details   String?
+  dueAt     DateTime?
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignments TaskAssignment[]
+
+  @@index([tenantId])
+  @@index([tenantId, dueAt])
+}
+
+model TaskAssignment {
+  id             String     @id @default(uuid())
+  taskId         String
+  locationId     String
+  status         TaskStatus @default(OPEN)
+  completedAt    DateTime?
+  completedBy    String?
+  reminderSentAt DateTime? // ensures at most one overdue reminder per assignment
+  createdAt      DateTime   @default(now())
+
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, locationId])
+  @@index([locationId, status])
+  @@index([status, reminderSentAt])
+}
+
+// ---------- Onboarding ----------
+
+model OnboardingTemplate {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  OnboardingItem[]
+
+  @@index([tenantId])
+}
+
+model OnboardingItem {
+  id         String @id @default(uuid())
+  templateId String
+  title      String
+  order      Int
+
+  template OnboardingTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  progress OnboardingProgress[]
+
+  @@index([templateId])
+}
+
+model OnboardingProgress {
+  id         String    @id @default(uuid())
+  locationId String
+  templateId String
+  itemId     String
+  done       Boolean   @default(false)
+  doneAt     DateTime?
+  doneBy     String?
+
+  location Location       @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  item     OnboardingItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, itemId])
+  @@index([locationId])
+  @@index([templateId])
+}
+
+// ---------- Commerce (KICK-CONTROLLED — no FRANCHISOR_ADMIN access at any layer) ----------
+
+model Product {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  sku       String
+  active    Boolean  @default(true)
+  shopifyId String? // for idempotent Shopify migration re-runs
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants    ProductVariant[]
+  rebateRules RebateRule[]
+  orderingRules LocationOrderingRule[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([shopifyId])
+}
+
+model ProductVariant {
+  id         String   @id @default(uuid())
+  productId  String
+  name       String
+  priceCents Int
+  currency   String   @default("CAD")
+  stock      Int? // null = untracked
+  active     Boolean  @default(true)
+  shopifyId  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderLines OrderLine[]
+
+  @@index([productId])
+  @@index([shopifyId])
+}
+
+model LocationOrderingRule {
+  id          String   @id @default(uuid())
+  locationId  String
+  productId   String? // null = applies to all products for this location
+  minQty      Int?
+  maxQty      Int?
+  cadenceDays Int? // e.g. can order every 30 days
+  createdAt   DateTime @default(now())
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+  @@index([productId])
+}
+
+model Order {
+  id                    String      @id @default(uuid())
+  tenantId              String
+  locationId            String
+  status                OrderStatus @default(PENDING)
+  subtotalCents         Int
+  allowanceAppliedCents Int         @default(0)
+  cardChargedCents      Int         @default(0)
+  refundedCents         Int         @default(0)
+  currency              String      @default("CAD")
+  stripePaymentIntentId String?     @unique
+  idempotencyKey        String      @unique
+  placedBy              String
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location      Location          @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  lines         OrderLine[]
+  ledgerEntries AllowanceLedger[]
+
+  @@index([tenantId, locationId, status])
+  @@index([stripePaymentIntentId])
+}
+
+model OrderLine {
+  id             String @id @default(uuid())
+  orderId        String
+  variantId      String
+  qty            Int
+  unitPriceCents Int // price snapshot at order time — never recompute from current price
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant        ProductVariant  @relation(fields: [variantId], references: [id])
+  rebateAccruals RebateAccrual[]
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
+// ---------- Allowances (KICK-CONTROLLED) ----------
+
+model Allowance {
+  id           String           @id @default(uuid())
+  tenantId     String
+  locationId   String
+  periodLabel  String // e.g. "2026-Q3"
+  grantedCents Int
+  currency     String           @default("CAD")
+  overflow     OverflowBehavior @default(CHARGE_CARD)
+  createdBy    String
+  createdAt    DateTime         @default(now())
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location          @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  ledger   AllowanceLedger[]
+
+  @@unique([locationId, periodLabel])
+  @@index([tenantId, locationId])
+}
+
+/// APPEND-ONLY. Application code must never UPDATE or DELETE a row here.
+/// Balance = grantedCents + SUM(deltaCents); balanceAfter is a cached snapshot for fast reads.
+model AllowanceLedger {
+  id           String       @id @default(uuid())
+  allowanceId  String
+  orderId      String?
+  deltaCents   Int // negative = debit, positive = credit
+  balanceAfter Int
+  reason       LedgerReason
+  createdAt    DateTime     @default(now())
+
+  allowance Allowance @relation(fields: [allowanceId], references: [id], onDelete: Cascade)
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([allowanceId, createdAt])
+  @@index([orderId])
+}
+
+// ---------- Rebates (KICK-CONTROLLED) ----------
+
+model RebateRule {
+  id            String     @id @default(uuid())
+  tenantId      String
+  productId     String
+  type          RebateType
+  value         Int // FLAT = cents; PERCENT = basis points (500 = 5%)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdBy     String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product  Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  accruals RebateAccrual[]
+
+  @@index([tenantId, productId])
+  @@index([productId, effectiveFrom, effectiveTo])
+}
+
+model RebateAccrual {
+  id           String   @id @default(uuid())
+  tenantId     String
+  orderLineId  String
+  rebateRuleId String
+  amountCents  Int
+  accruedAt    DateTime @default(now())
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderLine  OrderLine  @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+  rebateRule RebateRule @relation(fields: [rebateRuleId], references: [id], onDelete: Cascade)
+
+  @@unique([orderLineId, rebateRuleId]) // prevents double-accrual on duplicate webhook delivery
+  @@index([tenantId, accruedAt])
+}
+
+model RebateReport {
+  id            String             @id @default(uuid())
+  tenantId      String
+  period        RebateReportPeriod
+  periodLabel   String // "2026-06" or "2026-Q2"
+  salesTotalCents Int
+  rebateTotalCents Int
+  breakdownJson Json // per-product and per-store breakdown
+  csvStorageKey String?
+  pdfStorageKey String?
+  generatedAt   DateTime           @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, period, periodLabel])
+  @@index([tenantId, period])
+}
+
+// ---------- Infra ----------
+
+model PushSubscription {
+  id          String             @id @default(uuid())
+  clerkUserId String
+  tenantId    String?
+  endpoint    String             @unique
+  p256dh      String
+  auth        String
+  status      PushDeliveryStatus @default(PENDING)
+  lastError   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([clerkUserId])
+  @@index([tenantId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  actorId   String
+  role      Role
+  action    String // e.g. "product.update"
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
+}
+
+/// Tracks processed Stripe webhook event IDs to guarantee idempotent handling
+/// of duplicate deliveries (payment success, refund, etc.).
+model ProcessedStripeEvent {
+  id          String   @id // Stripe event id, e.g. evt_...
+  type        String
+  processedAt DateTime @default(now())
+}

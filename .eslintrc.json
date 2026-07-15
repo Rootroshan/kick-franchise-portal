@@ -1,0 +1,33 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals"],
+  "plugins": ["@typescript-eslint"],
+  "overrides": [
+    {
+      "files": ["app/franchisor/**/*.{ts,tsx}", "src/components/franchisor/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/server/modules/commerce/**",
+                  "**/server/modules/allowances/**",
+                  "**/server/modules/rebates/**",
+                  "@/server/modules/commerce*",
+                  "@/server/modules/allowances*",
+                  "@/server/modules/rebates*"
+                ],
+                "message": "P0 LOCKOUT VIOLATION: franchisor code must never import commerce, allowance, or rebate modules. See §5 of the technical spec."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]
+  }
+}
