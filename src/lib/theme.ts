@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const tenantThemeSchema = z.object({
-  logoUrl: z.string().url().optional().default(""),
+  logoUrl: z.union([z.string().url(), z.literal("")]).optional().default(""),
   primary: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().default("#111827"),
   secondary: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().default("#6b7280"),
   font: z.string().optional().default("Inter"),
