@@ -24,6 +24,7 @@
     "worker": "tsx worker/index.ts",
     "migrate-shopify": "tsx scripts/migrate-shopify.ts",
     "smoke-test": "tsx scripts/smoke-test.ts",
+    "seed:dev": "tsx scripts/seed-dev.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
