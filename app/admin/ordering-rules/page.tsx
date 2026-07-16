@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/server/modules/identity/guard";
 import { listLocations } from "@/server/modules/tenants/service";
 import { listProducts } from "@/server/modules/commerce/products";
@@ -7,6 +8,22 @@ import { OrderingRulesPanel } from "@/components/admin/OrderingRulesPanel";
 
 export default async function OrderingRulesPage() {
   const ctx = await requireRole("KICK_ADMIN")();
+
+  // Ordering rules are per-location, so this page requires a specific tenant.
+  if (!ctx.tenantId) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-bold">Ordering Rules</h1>
+        <p className="text-sm text-muted-foreground">
+          Select a tenant first — open a brand from{" "}
+          <Link href="/admin/tenants" className="underline">
+            Tenants
+          </Link>{" "}
+          or visit its subdomain to manage its ordering rules.
+        </p>
+      </div>
+    );
+  }
   const tenantId = ctx.tenantId;
 
   const [locations, products, rules] = await Promise.all([
@@ -14,7 +31,7 @@ export default async function OrderingRulesPage() {
     listProducts(ctx, tenantId),
     withTenant(ctx, (tx) =>
       tx.locationOrderingRule.findMany({
-        where: { location: { tenantId: tenantId ?? undefined } },
+        where: { location: { tenantId } },
         include: { location: true, product: true },
         orderBy: { createdAt: "desc" },
       })

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/server/modules/identity/guard";
 import { listAllowances } from "@/server/modules/allowances/admin";
 import { listLocations } from "@/server/modules/tenants/service";
@@ -6,6 +7,25 @@ import { AllowancesPanel } from "@/components/admin/AllowancesPanel";
 
 export default async function AllowancesPage() {
   const ctx = await requireRole("KICK_ADMIN")();
+
+  // Granting a per-location allowance is inherently tenant-specific — acting
+  // on "all tenants at once" would be a footgun (wrong brand's locations).
+  // If no tenant is resolved (KICK_ADMIN on the apex domain), point them at
+  // the tenant list to pick one instead of showing a cross-tenant grab-bag.
+  if (!ctx.tenantId) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-bold">Allowances</h1>
+        <p className="text-sm text-muted-foreground">
+          Select a tenant first — open a brand from{" "}
+          <Link href="/admin/tenants" className="underline">
+            Tenants
+          </Link>{" "}
+          or visit its subdomain to manage its allowances.
+        </p>
+      </div>
+    );
+  }
   const tenantId = ctx.tenantId;
 
   const [allowances, locations] = await Promise.all([listAllowances(ctx, tenantId), listLocations(ctx, tenantId)]);
