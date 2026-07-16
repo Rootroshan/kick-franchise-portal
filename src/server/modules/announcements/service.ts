@@ -71,17 +71,18 @@ export async function updateAnnouncement(ctx: RequestContext, id: string, input:
 }
 
 /**
- * [K,F]: sees all statuses for their tenant (or all tenants for KICK_ADMIN).
+ * [K,F]: sees all statuses for their tenant (or all tenants for KICK_ADMIN
+ * when no tenant is resolved, e.g. browsing the apex domain).
  * [U]: sees only PUBLISHED, non-expired announcements — scheduled and
  * expired ones must remain invisible per spec §10.1 acceptance criteria.
  */
-export async function listAnnouncements(ctx: RequestContext, tenantId: string) {
+export async function listAnnouncements(ctx: RequestContext, tenantId: string | null) {
   return withTenant(ctx, (tx) => {
     if (ctx.role === "FRANCHISEE_USER") {
       const now = new Date();
       return tx.announcement.findMany({
         where: {
-          tenantId,
+          tenantId: tenantId ?? undefined,
           status: "PUBLISHED",
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
@@ -90,7 +91,7 @@ export async function listAnnouncements(ctx: RequestContext, tenantId: string) {
       });
     }
     return tx.announcement.findMany({
-      where: { tenantId },
+      where: { tenantId: tenantId ?? undefined },
       include: { acks: true },
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });

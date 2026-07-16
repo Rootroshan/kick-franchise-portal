@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import "@/styles/globals.css";
 import { resolveTenantFromHost } from "@/server/modules/identity/tenantResolution";
 import { parseTenantTheme, themeToCssVariables } from "@/lib/theme";
+import { isDevBypassEnabled } from "@/lib/devBypass";
 import { PosthogProvider } from "@/components/analytics/PosthogProvider";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 
@@ -31,17 +32,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const tenant = await resolveTenantFromHost(host).catch(() => null);
   const theme = parseTenantTheme(tenant?.theme ?? {});
 
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <head>
-          <style>{`:root { ${themeToCssVariables(theme)} }`}</style>
-        </head>
-        <body className="min-h-screen antialiased" style={{ fontFamily: "var(--tenant-font)" }}>
-          <PosthogProvider>{children}</PosthogProvider>
-          <ServiceWorkerRegister />
-        </body>
-      </html>
-    </ClerkProvider>
+  const body = (
+    <html lang="en">
+      <head>
+        <style>{`:root { ${themeToCssVariables(theme)} }`}</style>
+      </head>
+      <body className="min-h-screen antialiased" style={{ fontFamily: "var(--tenant-font)" }}>
+        <PosthogProvider>{children}</PosthogProvider>
+        <ServiceWorkerRegister />
+      </body>
+    </html>
   );
+
+  return isDevBypassEnabled() ? body : <ClerkProvider>{body}</ClerkProvider>;
 }

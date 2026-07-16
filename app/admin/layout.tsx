@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { getRequestContext } from "@/server/modules/identity/requestContext";
 import { HttpError } from "@/server/modules/identity/errors";
+import { isDevBypassEnabled } from "@/lib/devBypass";
 
 const NAV = [
   { href: "/admin/tenants", label: "Tenants" },
@@ -46,7 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             ))}
           </nav>
           <div className="hidden lg:block lg:pt-4">
-            <UserButton afterSignOutUrl="/" />
+            {!isDevBypassEnabled() && <UserButton afterSignOutUrl="/" />}
           </div>
         </div>
       </aside>

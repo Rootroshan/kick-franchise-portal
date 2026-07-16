@@ -89,8 +89,8 @@ export async function adjustAllowance(ctx: RequestContext, input: z.infer<typeof
   });
 }
 
-export async function listAllowances(ctx: RequestContext, tenantId: string) {
-  return withTenant(ctx, (tx) => tx.allowance.findMany({ where: { tenantId }, include: { location: true } }));
+export async function listAllowances(ctx: RequestContext, tenantId: string | null) {
+  return withTenant(ctx, (tx) => tx.allowance.findMany({ where: { tenantId: tenantId ?? undefined }, include: { location: true } }));
 }
 
 export async function getOwnAllowanceBalance(ctx: RequestContext) {

@@ -7,13 +7,12 @@ import { BottomNav } from "@/components/franchisee/BottomNav";
 export default async function FranchiseeLayout({ children }: { children: React.ReactNode }) {
   try {
     const ctx = await getRequestContext();
-    if (ctx.role !== "FRANCHISEE_USER") {
-      redirect("/"); // signed in, wrong role — no franchisee surface for them here
-    }
+    if (ctx.role === "KICK_ADMIN") redirect("/admin/tenants");
+    if (ctx.role === "FRANCHISOR_ADMIN") redirect("/franchisor/announcements");
   } catch (err) {
     if (err instanceof HttpError) {
       if (err.status === 401) redirect("/sign-in");
-      redirect("/"); // 403/404 (wrong tenant, no membership) — nothing to show
+      throw err; // 403/404 here means genuinely broken membership — surface it, don't loop
     }
     throw err;
   }

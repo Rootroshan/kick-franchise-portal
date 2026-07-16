@@ -16,9 +16,10 @@ export const POST = withErrorHandling(async (req) => {
 
   const assignments = await withTenant(ctx, async (tx) => {
     const task = await tx.task.findUnique({ where: { id: taskId } });
-    if (!task || task.tenantId !== ctx.tenantId) throw new HttpError(404, "Task not found");
+    if (!task) throw new HttpError(404, "Task not found");
+    if (ctx.role !== "KICK_ADMIN" && task.tenantId !== ctx.tenantId) throw new HttpError(404, "Task not found");
 
-    const locations = await tx.location.findMany({ where: { id: { in: input.locationIds }, tenantId: ctx.tenantId! } });
+    const locations = await tx.location.findMany({ where: { id: { in: input.locationIds }, tenantId: task.tenantId } });
     if (locations.length !== input.locationIds.length) {
       throw new HttpError(422, "One or more locations do not belong to this tenant");
     }
@@ -34,7 +35,7 @@ export const POST = withErrorHandling(async (req) => {
     );
 
     await writeAuditLog(tx, {
-      tenantId: ctx.tenantId,
+      tenantId: task.tenantId,
       actorId: ctx.userId,
       role: ctx.role,
       action: "task.assign",

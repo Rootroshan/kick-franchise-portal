@@ -32,10 +32,10 @@ export async function createOnboardingTemplate(ctx: RequestContext, tenantId: st
   });
 }
 
-export async function listOnboardingTemplates(ctx: RequestContext, tenantId: string) {
+export async function listOnboardingTemplates(ctx: RequestContext, tenantId: string | null) {
   return withTenant(ctx, (tx) =>
     tx.onboardingTemplate.findMany({
-      where: { tenantId },
+      where: { tenantId: tenantId ?? undefined },
       include: { items: { orderBy: { order: "asc" } } },
     })
   );

@@ -41,17 +41,17 @@ export async function createTask(ctx: RequestContext, tenantId: string, input: z
 }
 
 /** [K,F,U]: franchisee sees only assignments for their own location; admins see all with per-location breakdown. */
-export async function listTasks(ctx: RequestContext, tenantId: string) {
+export async function listTasks(ctx: RequestContext, tenantId: string | null) {
   return withTenant(ctx, (tx) => {
     if (ctx.role === "FRANCHISEE_USER") {
       return tx.task.findMany({
-        where: { tenantId, assignments: { some: { locationId: ctx.locationId! } } },
+        where: { tenantId: tenantId ?? undefined, assignments: { some: { locationId: ctx.locationId! } } },
         include: { assignments: { where: { locationId: ctx.locationId! } } },
         orderBy: { dueAt: "asc" },
       });
     }
     return tx.task.findMany({
-      where: { tenantId },
+      where: { tenantId: tenantId ?? undefined },
       include: { assignments: { include: { location: true } } },
       orderBy: { dueAt: "asc" },
     });

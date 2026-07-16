@@ -38,6 +38,6 @@ export async function createRebateRule(ctx: RequestContext, tenantId: string, in
   });
 }
 
-export async function listRebateRules(ctx: RequestContext, tenantId: string) {
-  return withTenant(ctx, (tx) => tx.rebateRule.findMany({ where: { tenantId }, include: { product: true } }));
+export async function listRebateRules(ctx: RequestContext, tenantId: string | null) {
+  return withTenant(ctx, (tx) => tx.rebateRule.findMany({ where: { tenantId: tenantId ?? undefined }, include: { product: true } }));
 }

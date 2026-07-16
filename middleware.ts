@@ -11,6 +11,19 @@ const isPublicRoute = createRouteMatcher([
   "/icons/(.*)",
 ]);
 
+// DEV-ONLY: clerkMiddleware() itself throws on an invalid/placeholder
+// publishable key before any request handling runs, so there is no way to
+// bypass auth from inside it. Only reachable with DEV_BYPASS_AUTH=true AND
+// NODE_ENV=development (see requestContext.ts's matching guard) — never set
+// DEV_BYPASS_AUTH outside a local .env.local file.
+const devBypassEnabled = process.env.NODE_ENV === "development" && process.env.DEV_BYPASS_AUTH === "true";
+
+function withHostHeader(req: NextRequest): NextResponse {
+  const res = NextResponse.next();
+  res.headers.set("x-kick-host", req.headers.get("host") ?? "");
+  return res;
+}
+
 /**
  * Resolves the request's tenant from the Host header and forwards it as a
  * trusted header (`x-kick-host`) for the identity module to re-resolve
@@ -19,15 +32,16 @@ const isPublicRoute = createRouteMatcher([
  * tenant lookup + RBAC happens in getRequestContext() on every request. This
  * middleware only handles auth gating and passes the raw host through.
  */
-export default clerkMiddleware(async (authFn, req: NextRequest) => {
-  if (!isPublicRoute(req)) {
-    await authFn.protect();
-  }
-
-  const res = NextResponse.next();
-  res.headers.set("x-kick-host", req.headers.get("host") ?? "");
-  return res;
-});
+export default devBypassEnabled
+  ? function devMiddleware(req: NextRequest) {
+      return withHostHeader(req);
+    }
+  : clerkMiddleware(async (authFn, req: NextRequest) => {
+      if (!isPublicRoute(req)) {
+        await authFn.protect();
+      }
+      return withHostHeader(req);
+    });
 
 export const config = {
   matcher: [

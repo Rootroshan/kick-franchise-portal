@@ -57,10 +57,10 @@ export async function createAsset(ctx: RequestContext, tenantId: string, input: 
 }
 
 /** [K,F,U]: franchisees see only ACTIVE assets; admins see everything (incl. ARCHIVED/DEPRECATED). */
-export async function listAssets(ctx: RequestContext, tenantId: string, filters: { category?: string; search?: string }) {
+export async function listAssets(ctx: RequestContext, tenantId: string | null, filters: { category?: string; search?: string }) {
   return withTenant(ctx, (tx) => {
     const baseWhere = {
-      tenantId,
+      tenantId: tenantId ?? undefined,
       ...(filters.category ? { category: filters.category } : {}),
       ...(filters.search ? { name: { contains: filters.search, mode: "insensitive" as const } } : {}),
     };

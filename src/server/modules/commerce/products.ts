@@ -45,10 +45,10 @@ export async function updateProduct(ctx: RequestContext, productId: string, inpu
   });
 }
 
-export async function listProducts(ctx: RequestContext, tenantId: string) {
+export async function listProducts(ctx: RequestContext, tenantId: string | null) {
   return withTenant(ctx, (tx) =>
     tx.product.findMany({
-      where: { tenantId },
+      where: { tenantId: tenantId ?? undefined },
       include: { variants: true },
       orderBy: { createdAt: "desc" },
     })

@@ -1,22 +1,36 @@
 import { auth } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { withTenant, systemKickContext, type RequestContext } from "@/server/db/withTenant";
+import { isDevBypassEnabled } from "@/lib/devBypass";
 import { resolveTenantFromHost } from "./tenantResolution";
 import { HttpError } from "./errors";
 
 /**
- * Builds the trusted per-request context:
- *   1. Verify Clerk session (server-side, never trust client claims).
- *   2. Resolve tenant from the Host header.
- *   3. Load the mirrored Membership row for this Clerk user.
- *   4. Confirm membership belongs to the resolved tenant, OR the user is a
- *      cross-tenant KICK_ADMIN.
- *
- * This never reads role/tenant from client-supplied headers, cookies, or
- * request bodies — only from the verified session + our own Membership
- * mirror + the Host header driven tenant lookup.
+ * DEV-ONLY escape hatch: lets the app run on localhost before a real Clerk
+ * account exists. Requires DEV_BYPASS_AUTH=true AND NODE_ENV=development —
+ * either condition failing means this is never reachable, so there is no
+ * path for this to activate in a deployed environment. Never set
+ * DEV_BYPASS_AUTH outside a local .env.local file. Short-circuits entirely
+ * before any Clerk/host/Membership lookup — reads DEV_BYPASS_ROLE/
+ * DEV_BYPASS_TENANT_ID/DEV_BYPASS_LOCATION_ID directly from env.
  */
+function devBypassContext(): RequestContext | null {
+  if (!isDevBypassEnabled()) {
+    return null;
+  }
+  const role = (process.env.DEV_BYPASS_ROLE as RequestContext["role"]) || "KICK_ADMIN";
+  return {
+    tenantId: role === "KICK_ADMIN" ? null : process.env.DEV_BYPASS_TENANT_ID || null,
+    role,
+    locationId: process.env.DEV_BYPASS_LOCATION_ID || null,
+    userId: "dev-bypass-user",
+  };
+}
+
 export async function getRequestContext(): Promise<RequestContext> {
+  const devCtx = devBypassContext();
+  if (devCtx) return devCtx;
+
   const { userId } = await auth();
   if (!userId) {
     throw new HttpError(401, "Not authenticated");
