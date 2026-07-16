@@ -6,7 +6,7 @@ import { AllowancesPanel } from "@/components/admin/AllowancesPanel";
 
 export default async function AllowancesPage() {
   const ctx = await requireRole("KICK_ADMIN")();
-  const tenantId = ctx.tenantId!;
+  const tenantId = ctx.tenantId;
 
   const [allowances, locations] = await Promise.all([listAllowances(ctx, tenantId), listLocations(ctx, tenantId)]);
 

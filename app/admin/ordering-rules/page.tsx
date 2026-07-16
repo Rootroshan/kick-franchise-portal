@@ -7,14 +7,14 @@ import { OrderingRulesPanel } from "@/components/admin/OrderingRulesPanel";
 
 export default async function OrderingRulesPage() {
   const ctx = await requireRole("KICK_ADMIN")();
-  const tenantId = ctx.tenantId!;
+  const tenantId = ctx.tenantId;
 
   const [locations, products, rules] = await Promise.all([
     listLocations(ctx, tenantId),
     listProducts(ctx, tenantId),
     withTenant(ctx, (tx) =>
       tx.locationOrderingRule.findMany({
-        where: { location: { tenantId } },
+        where: { location: { tenantId: tenantId ?? undefined } },
         include: { location: true, product: true },
         orderBy: { createdAt: "desc" },
       })

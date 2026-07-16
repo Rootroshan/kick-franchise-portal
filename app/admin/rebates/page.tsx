@@ -6,7 +6,7 @@ import { RebatesPanel } from "@/components/admin/RebatesPanel";
 
 export default async function RebatesPage() {
   const ctx = await requireRole("KICK_ADMIN")();
-  const tenantId = ctx.tenantId!;
+  const tenantId = ctx.tenantId;
 
   const [rules, products] = await Promise.all([listRebateRules(ctx, tenantId), listProducts(ctx, tenantId)]);
 

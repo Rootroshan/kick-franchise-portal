@@ -96,8 +96,8 @@ export async function createLocation(ctx: RequestContext, tenantId: string, inpu
   });
 }
 
-export async function listLocations(ctx: RequestContext, tenantId: string) {
-  return withTenant(ctx, (tx) => tx.location.findMany({ where: { tenantId }, orderBy: { name: "asc" } }));
+export async function listLocations(ctx: RequestContext, tenantId: string | null) {
+  return withTenant(ctx, (tx) => tx.location.findMany({ where: { tenantId: tenantId ?? undefined }, orderBy: { name: "asc" } }));
 }
 
 /** Creates a pending custom domain with a DNS TXT verification token (spec §16/§19). */
@@ -182,8 +182,8 @@ export async function verifyCustomDomain(ctx: RequestContext, domainId: string) 
   });
 }
 
-export async function listCustomDomains(ctx: RequestContext, tenantId: string) {
-  return withTenant(ctx, (tx) => tx.customDomain.findMany({ where: { tenantId } }));
+export async function listCustomDomains(ctx: RequestContext, tenantId: string | null) {
+  return withTenant(ctx, (tx) => tx.customDomain.findMany({ where: { tenantId: tenantId ?? undefined } }));
 }
 
 /** [K,F]: invite/assign a user to this tenant with a role. Franchisor may only invite FRANCHISEE_USER within their own tenant. */
@@ -229,6 +229,6 @@ export async function createMembership(ctx: RequestContext, tenantId: string, in
   });
 }
 
-export async function listMemberships(ctx: RequestContext, tenantId: string) {
-  return withTenant(ctx, (tx) => tx.membership.findMany({ where: { tenantId }, include: { location: true } }));
+export async function listMemberships(ctx: RequestContext, tenantId: string | null) {
+  return withTenant(ctx, (tx) => tx.membership.findMany({ where: { tenantId: tenantId ?? undefined }, include: { location: true } }));
 }

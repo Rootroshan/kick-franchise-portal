@@ -5,7 +5,7 @@ import { CommercePanel, type Product } from "@/components/admin/CommercePanel";
 
 export default async function CommercePage() {
   const ctx = await requireRole("KICK_ADMIN")();
-  const products = await listProducts(ctx, ctx.tenantId!);
+  const products = await listProducts(ctx, ctx.tenantId);
 
   return (
     <div className="flex flex-col gap-6">
