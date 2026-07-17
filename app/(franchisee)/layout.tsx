@@ -11,8 +11,12 @@ export default async function FranchiseeLayout({ children }: { children: React.R
     if (ctx.role === "FRANCHISOR_ADMIN") redirect("/franchisor/announcements");
   } catch (err) {
     if (err instanceof HttpError) {
-      if (err.status === 401) redirect("/sign-in");
-      throw err; // 403/404 here means genuinely broken membership — surface it, don't loop
+      // 401 = not signed in. 404 = signed in but no tenant resolves for this
+      // host / no membership yet (e.g. a freshly-signed-up user on the apex,
+      // before a KICK_ADMIN/brand membership is granted). Both should land on
+      // sign-in rather than a bare 404 — a redirect never grants access.
+      if (err.status === 401 || err.status === 404) redirect("/sign-in");
+      throw err; // 403 = genuinely forbidden membership — surface it, don't loop
     }
     throw err;
   }
