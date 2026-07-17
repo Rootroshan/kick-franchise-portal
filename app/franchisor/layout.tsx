@@ -1,56 +1,48 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
 import { getRequestContext } from "@/server/modules/identity/requestContext";
 import { HttpError } from "@/server/modules/identity/errors";
-import { isDevBypassEnabled } from "@/lib/devBypass";
+import { withTenant } from "@/server/db/withTenant";
+import { getFranchisorBadgeCount } from "@/server/modules/franchisor-dashboard/badge";
+import { FranchisorShell } from "@/components/franchisor/layout/FranchisorShell";
 import { PushOptInBanner } from "@/components/franchisor/PushOptInBanner";
 
-const NAV = [
-  { href: "/franchisor/announcements", label: "Announcements" },
-  { href: "/franchisor/assets", label: "Artwork Hub" },
-  { href: "/franchisor/tasks", label: "Tasks" },
-  { href: "/franchisor/onboarding", label: "Onboarding" },
-];
-
+/**
+ * Franchisor portal gate + shell. FRANCHISOR_ADMIN only; other roles are
+ * redirected to their own home (KICK_ADMIN → /admin, else → /). Unauthenticated
+ * requests throw HttpError(401) from getRequestContext → redirected to sign-in.
+ */
 export default async function FranchisorLayout({ children }: { children: React.ReactNode }) {
+  let ctx;
   try {
-    const ctx = await getRequestContext();
-    if (ctx.role !== "FRANCHISOR_ADMIN") {
-      redirect("/");
-    }
+    ctx = await getRequestContext();
   } catch (err) {
     if (err instanceof HttpError) {
-      redirect("/");
+      redirect(err.status === 401 ? "/sign-in" : "/");
     }
     throw err;
   }
 
+  if (ctx.role === "KICK_ADMIN") redirect("/admin");
+  if (ctx.role !== "FRANCHISOR_ADMIN") redirect("/");
+  if (!ctx.tenantId) redirect("/");
+
+  const tenantId = ctx.tenantId;
+
+  const [brand, badge] = await Promise.all([
+    withTenant(ctx, (tx) => tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })),
+    getFranchisorBadgeCount(ctx, tenantId).catch(() => 0),
+  ]);
+
+  // displayName isn't on the context; resolve from membership for the header greeting.
+  const membership = await withTenant(ctx, (tx) =>
+    tx.membership.findFirst({ where: { tenantId, clerkUserId: ctx.userId }, select: { displayName: true, email: true } })
+  );
+  const userName = membership?.displayName || membership?.email?.split("@")[0] || "Franchisor Admin";
+
   return (
-    <div className="min-h-screen lg:flex">
-      <aside className="border-b border-border bg-card lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between p-4 lg:flex-col lg:items-stretch lg:gap-4">
-          <div className="text-lg font-bold">Franchisor</div>
-          <nav className="flex flex-wrap gap-1 lg:flex-col">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="hidden lg:block lg:pt-4">
-            {!isDevBypassEnabled() && <UserButton afterSignOutUrl="/" />}
-          </div>
-        </div>
-      </aside>
-      <main className="flex-1 p-4 sm:p-6 lg:p-8">
-        <PushOptInBanner />
-        {children}
-      </main>
-    </div>
+    <FranchisorShell brandName={brand?.name ?? "Franchisor Portal"} userName={userName} notificationCount={badge}>
+      <PushOptInBanner />
+      {children}
+    </FranchisorShell>
   );
 }

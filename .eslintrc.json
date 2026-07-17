@@ -4,7 +4,12 @@
   "plugins": ["@typescript-eslint"],
   "overrides": [
     {
-      "files": ["app/franchisor/**/*.{ts,tsx}", "src/components/franchisor/**/*.{ts,tsx}"],
+      "files": [
+        "app/franchisor/**/*.{ts,tsx}",
+        "src/components/franchisor/**/*.{ts,tsx}",
+        "src/server/modules/franchisor-dashboard/**/*.{ts,tsx}",
+        "src/server/modules/engagement/**/*.{ts,tsx}"
+      ],
       "rules": {
         "no-restricted-imports": [
           "error",

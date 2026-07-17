@@ -187,6 +187,40 @@ async function main() {
       });
     }
 
+    // --- Franchisor engagement data: announcement acks + artwork downloads +
+    //     activity log (so the Franchisor dashboard KPIs show real numbers). ---
+    const ackAnnouncement = await tx.announcement.findFirst({ where: { tenantId: TENANT_ID, requiresAck: true } });
+    if (ackAnnouncement) {
+      // Two of the three stores have acknowledged → ~67% read.
+      for (const [loc, user] of [[LOC_1, "seed-user-marcus"], [LOC_2, "seed-user-sofia"]] as const) {
+        await tx.announcementAck.upsert({
+          where: { announcementId_clerkUserId: { announcementId: ackAnnouncement.id, clerkUserId: user } },
+          create: { announcementId: ackAnnouncement.id, clerkUserId: user, locationId: loc, acknowledgedAt: new Date() },
+          update: {},
+        });
+      }
+    }
+
+    // Artwork download events + operational activity, recorded in the audit log
+    // (the Franchisor dashboard reads asset.download for the Artwork KPI and
+    // non-commerce actions for the activity feed). Idempotent by (action,entityId).
+    const firstAsset = await tx.asset.findFirst({ where: { tenantId: TENANT_ID } });
+    const activitySeed: Array<{ action: string; entity: string; entityId: string | null; actorId: string }> = [
+      { action: "asset.download", entity: "Asset", entityId: firstAsset?.id ?? null, actorId: "seed-user-marcus" },
+      { action: "asset.download", entity: "Asset", entityId: firstAsset?.id ?? null, actorId: "seed-user-sofia" },
+      { action: "announcement.published", entity: "Announcement", entityId: ackAnnouncement?.id ?? null, actorId: "seed-user-priya" },
+      { action: "task.assigned", entity: "Task", entityId: null, actorId: "seed-user-priya" },
+      { action: "onboarding.item_completed", entity: "OnboardingProgress", entityId: null, actorId: "seed-user-marcus" },
+    ];
+    for (const a of activitySeed) {
+      const exists = await tx.auditLog.findFirst({ where: { tenantId: TENANT_ID, action: a.action, actorId: a.actorId, entityId: a.entityId } });
+      if (!exists) {
+        await tx.auditLog.create({
+          data: { tenantId: TENANT_ID, actorId: a.actorId, role: "FRANCHISOR_ADMIN", action: a.action, entity: a.entity, entityId: a.entityId },
+        });
+      }
+    }
+
     // --- An order or two (so /admin/orders and franchisee order history aren't empty) ---
     const coffeeVariant = await tx.productVariant.findFirstOrThrow({ where: { product: { sku: "COFFEE-1KG" }, name: "Dark Roast" } });
     const cupVariant = await tx.productVariant.findFirstOrThrow({ where: { product: { sku: "CUP-12OZ" } } });
