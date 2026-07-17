@@ -10,5 +10,8 @@ export default defineConfig({
     exclude: ["tests/e2e/**"],
     testTimeout: 15000,
     hookTimeout: 30000,
+    // Integration tests share one real Postgres DB (kick_test) and reset it
+    // between tests — they must NOT run in parallel or they race on shared rows.
+    fileParallelism: false,
   },
 });

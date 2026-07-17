@@ -5,9 +5,9 @@ import { requestAssetUpload } from "@/server/modules/assets/service";
 
 const requestSchema = z.object({ mime: z.string().min(1), sizeBytes: z.number().int().positive() });
 
-/** [K,F]: obtain a presigned PUT URL before uploading a new asset. */
+/** [K]: obtain a presigned PUT URL before uploading a new asset. Artwork is uploaded by Kick only. */
 export const POST = withErrorHandling(async (req) => {
-  const ctx = await requireTenantRole("KICK_ADMIN", "FRANCHISOR_ADMIN")();
+  const ctx = await requireTenantRole("KICK_ADMIN")();
   const input = await parseJsonBody(req, requestSchema);
   const result = await requestAssetUpload(ctx, ctx.tenantId, input.mime, input.sizeBytes);
   return Response.json(result);

@@ -11,9 +11,9 @@ export const GET = withErrorHandling(async (req) => {
   return Response.json({ assets });
 });
 
-/** [K,F]: finalize an asset record after a presigned upload completes. */
+/** [K]: finalize an asset record after a presigned upload completes. Artwork is uploaded by Kick only. */
 export const POST = withErrorHandling(async (req) => {
-  const ctx = await requireTenantRole("KICK_ADMIN", "FRANCHISOR_ADMIN")();
+  const ctx = await requireTenantRole("KICK_ADMIN")();
   const input = await parseJsonBody(req, createAssetUploadSchema);
   const asset = await createAsset(ctx, ctx.tenantId, input);
   return Response.json({ asset }, { status: 201 });

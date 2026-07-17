@@ -1,59 +1,79 @@
-import Link from "next/link";
+import { WalletCards, TrendingDown, PiggyBank, Layers } from "lucide-react";
 import { requireRole } from "@/server/modules/identity/guard";
-import { listAllowances } from "@/server/modules/allowances/admin";
-import { listLocations } from "@/server/modules/tenants/service";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AllowancesPanel } from "@/components/admin/AllowancesPanel";
+import { listAllowancesAdmin, getAllowanceKpis } from "@/server/modules/allowances/listView";
+import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
+import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
+import { formatCents } from "@/lib/utils";
+import { PageHeader, KPIStatCard, Pagination } from "@/components/admin/kit";
+import { ListToolbar } from "@/components/admin/ListToolbar";
+import { DataTable, type Column } from "@/components/admin/DataTable";
+import type { AllowanceRow } from "@/server/modules/allowances/listView";
 
-export default async function AllowancesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AllowancesPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const ctx = await requireRole("KICK_ADMIN")();
+  const q = parseListQuery(searchParams);
+  const [{ rows, total }, kpis, brandOptions] = await Promise.all([
+    listAllowancesAdmin(ctx, q),
+    getAllowanceKpis(ctx),
+    getBrandFilterOptions(ctx),
+  ]);
+  const pages = pageCount(total, q.limit);
 
-  // Granting a per-location allowance is inherently tenant-specific — acting
-  // on "all tenants at once" would be a footgun (wrong brand's locations).
-  // If no tenant is resolved (KICK_ADMIN on the apex domain), point them at
-  // the tenant list to pick one instead of showing a cross-tenant grab-bag.
-  if (!ctx.tenantId) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold">Allowances</h1>
-        <p className="text-sm text-muted-foreground">
-          Select a tenant first — open a brand from{" "}
-          <Link href="/admin/tenants" className="underline">
-            Tenants
-          </Link>{" "}
-          or visit its subdomain to manage its allowances.
-        </p>
-      </div>
-    );
-  }
-  const tenantId = ctx.tenantId;
-
-  const [allowances, locations] = await Promise.all([listAllowances(ctx, tenantId), listLocations(ctx, tenantId)]);
+  const columns: Column<AllowanceRow>[] = [
+    {
+      key: "store",
+      header: "Store",
+      cell: (a) => (
+        <div>
+          <div className="font-medium text-foreground">{a.storeName}</div>
+          <div className="text-xs text-muted-foreground">{a.brandName}</div>
+        </div>
+      ),
+    },
+    { key: "period", header: "Period", sortKey: "period", cell: (a) => <span className="text-muted-foreground">{a.periodLabel}</span> },
+    { key: "granted", header: "Granted", hideOnMobile: true, cell: (a) => <span className="tabular-nums">{formatCents(a.grantedCents)}</span> },
+    { key: "used", header: "Used", hideOnMobile: true, cell: (a) => <span className="tabular-nums text-muted-foreground">{formatCents(a.usedCents)}</span> },
+    {
+      key: "balance",
+      header: "Balance",
+      cell: (a) => <span className={`font-medium tabular-nums ${a.balanceCents <= 0 ? "text-status-error" : "text-status-success"}`}>{formatCents(a.balanceCents)}</span>,
+    },
+  ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">Allowances</h1>
-        <p className="text-sm text-muted-foreground">Grant per-location spending allowances for a period.</p>
+    <div>
+      <PageHeader title="Allowances" description="Per-store spending allowances across all brands, with computed balances from the append-only ledger." />
+
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KPIStatCard label="Allowances" value={kpis.count} icon={Layers} tone="info" />
+        <KPIStatCard label="Granted" value={formatCents(kpis.grantedCents)} icon={WalletCards} tone="purple" />
+        <KPIStatCard label="Used" value={formatCents(kpis.usedCents)} icon={TrendingDown} tone="warning" />
+        <KPIStatCard label="Balance" value={formatCents(kpis.balanceCents)} icon={PiggyBank} tone="success" />
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Grants</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AllowancesPanel
-            locations={locations.map((l) => ({ id: l.id, name: l.name }))}
-            initialAllowances={allowances.map((a) => ({
-              id: a.id,
-              locationName: a.location.name,
-              periodLabel: a.periodLabel,
-              grantedCents: a.grantedCents,
-              currency: a.currency,
-              overflow: a.overflow,
-            }))}
-          />
-        </CardContent>
-      </Card>
+
+      <ListToolbar
+        searchPlaceholder="Search by store or period…"
+        filters={[{ key: "brand", label: "Brand", options: brandOptions }]}
+      />
+
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(a) => a.id}
+        rowHref={(a) => `/admin/allowances/${a.id}`}
+        basePath="/admin/allowances"
+        currentParams={q.raw}
+        sort={q.sort}
+        direction={q.direction}
+        empty={{ title: "No allowances found", description: q.search || q.brand ? "Try different filters." : "Grant allowances to stores to see them here." }}
+      />
+
+      <div className="flex items-center justify-between">
+        <p className="mt-3 text-xs text-muted-foreground">{total} allowance{total === 1 ? "" : "s"} total</p>
+        <Pagination page={q.page} pageCount={pages} makeHref={(p) => buildHref("/admin/allowances", q.raw, { page: p })} />
+      </div>
     </div>
   );
 }

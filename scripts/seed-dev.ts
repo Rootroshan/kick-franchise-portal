@@ -33,7 +33,7 @@ async function main() {
         slug: "maple-grove-coffee",
         theme: { primary: "#7c3aed", secondary: "#f59e0b", font: "Inter" },
       },
-      update: { name: "Maple Grove Coffee", theme: { primary: "#7c3aed", secondary: "#f59e0b", font: "Inter" } },
+      update: { name: "Maple Grove Coffee", slug: "maple-grove-coffee", theme: { primary: "#7c3aed", secondary: "#f59e0b", font: "Inter" } },
     });
 
     // --- Locations (3 stores) ---
