@@ -1,11 +1,6 @@
-import { Spinner } from "@/components/ui/spinner";
+import { FullScreenLoader } from "@/components/ui/FullScreenLoader";
 
-// Shown automatically by Next.js while any route's server components fetch
-// their data. Centered full-screen.
+// Root route-transition loader (also covers the sign-in / auth area).
 export default function Loading() {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Spinner />
-    </div>
-  );
+  return <FullScreenLoader message="Verifying secure access…" />;
 }

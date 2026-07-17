@@ -8,6 +8,15 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      keyframes: {
+        "pulse-scale": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.65", transform: "scale(0.92)" },
+        },
+      },
+      animation: {
+        "pulse-scale": "pulse-scale 1.6s ease-in-out infinite",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

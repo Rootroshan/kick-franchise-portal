@@ -63,3 +63,41 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Accessibility: honour reduced-motion globally as a safety net beyond the
+   per-component motion-safe/reduce variants. Near-instant, non-zero durations
+   avoid breaking transitionend/animationend listeners. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Hide scrollbars visually while keeping scroll fully functional (wheel,
+   trackpad, touch, keyboard, programmatic). Never uses overflow:hidden. */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

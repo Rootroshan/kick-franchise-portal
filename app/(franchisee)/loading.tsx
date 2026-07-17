@@ -1,7 +1,6 @@
-import { Spinner } from "@/components/ui/spinner";
+import { FullScreenLoader } from "@/components/ui/FullScreenLoader";
 
-// Scoped to the franchisee section so the bottom nav stays visible while the
-// page's content loads.
+// Store portal route-transition loader.
 export default function Loading() {
-  return <Spinner />;
+  return <FullScreenLoader message="Loading your store portal…" />;
 }
