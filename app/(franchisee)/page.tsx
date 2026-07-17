@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getRequestContext } from "@/server/modules/identity/requestContext";
+import { requireRole } from "@/server/modules/identity/guard";
 import { listAnnouncements } from "@/server/modules/announcements/service";
 import { getOwnAllowanceBalance } from "@/server/modules/allowances/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,9 +8,13 @@ import { AnnouncementCard } from "@/components/franchisee/AnnouncementCard";
 import { PushOptIn } from "@/components/franchisee/PushOptIn";
 
 export default async function FeedPage() {
-  const ctx = await getRequestContext();
+  // Self-enforce the franchisee requirement here rather than relying on the
+  // layout's redirect — a FRANCHISEE_USER always has a resolved tenant, so
+  // no non-null assertion smell. The layout still redirects other roles away
+  // first; this is the belt to its suspenders.
+  const ctx = await requireRole("FRANCHISEE_USER")();
   const [announcements, balances] = await Promise.all([
-    listAnnouncements(ctx, ctx.tenantId!),
+    listAnnouncements(ctx, ctx.tenantId),
     getOwnAllowanceBalance(ctx),
   ]);
 
