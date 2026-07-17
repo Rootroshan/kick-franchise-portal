@@ -7,6 +7,7 @@ import { parseTenantTheme, themeToCssVariables } from "@/lib/theme";
 import { isDevBypassEnabled } from "@/lib/devBypass";
 import { PosthogProvider } from "@/components/analytics/PosthogProvider";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Kick Franchise Portal",
@@ -40,6 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen antialiased" style={{ fontFamily: "var(--tenant-font)" }}>
         <PosthogProvider>{children}</PosthogProvider>
         <ServiceWorkerRegister />
+        <Toaster position="top-right" richColors closeButton />
       </body>
     </html>
   );
