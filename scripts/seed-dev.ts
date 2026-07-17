@@ -201,6 +201,24 @@ async function main() {
       }
     }
 
+    // --- Brand artwork assets (so the Artwork Hub grid isn't empty) ---
+    const assetSeed = [
+      { name: "Primary Logo", type: "logo", category: "Logos", mime: "image/svg+xml", sizeBytes: 24_500 },
+      { name: "Fall Menu Board", type: "menuboard", category: "Menu Boards", mime: "image/png", sizeBytes: 1_820_000 },
+      { name: "Pumpkin Spice Promo", type: "campaign", category: "Promotions", mime: "image/jpeg", sizeBytes: 640_000 },
+      { name: "Window Decal", type: "signage", category: "Signage", mime: "image/png", sizeBytes: 410_000 },
+      { name: "Instagram Story Template", type: "template", category: "Social Media", mime: "image/png", sizeBytes: 305_000 },
+      { name: "Brand Guidelines", type: "guidelines", category: "Guidelines", mime: "application/pdf", sizeBytes: 2_450_000 },
+    ];
+    for (const a of assetSeed) {
+      const exists = await tx.asset.findFirst({ where: { tenantId: TENANT_ID, name: a.name } });
+      if (!exists) {
+        await tx.asset.create({
+          data: { tenantId: TENANT_ID, name: a.name, type: a.type, category: a.category, mime: a.mime, sizeBytes: a.sizeBytes, storageKey: `tenants/${TENANT_ID}/assets/seed-${a.type}`, status: "ACTIVE", createdBy: "seed" },
+        });
+      }
+    }
+
     // Artwork download events + operational activity, recorded in the audit log
     // (the Franchisor dashboard reads asset.download for the Artwork KPI and
     // non-commerce actions for the activity feed). Idempotent by (action,entityId).
