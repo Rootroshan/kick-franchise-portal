@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Search, Bell, ChevronDown, PanelLeftClose, PanelLeft, ShieldCheck } from "lucide-react";
+import { Menu, X, Search, Bell, PanelLeftClose, PanelLeft, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FRANCHISOR_NAV } from "./franchisorNav";
 import { FranchisorSearch } from "./FranchisorSearch";
+import { LogoutButton } from "@/components/layout/LogoutButton";
 
 /**
  * Responsive franchisor portal shell: navy sidebar (collapsible desktop rail +
@@ -151,13 +152,15 @@ export function FranchisorShell({
             )}
           </Link>
 
-          <button className="flex items-center gap-2 rounded-md p-1.5 hover:bg-muted" aria-label="Account menu">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-              {initials || "FA"}
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center gap-2 rounded-md p-1.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                {initials || "FA"}
+              </span>
+              <span className="hidden text-sm font-medium sm:block">{userName}</span>
             </span>
-            <span className="hidden text-sm font-medium sm:block">{userName}</span>
-            <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden="true" />
-          </button>
+            <LogoutButton variant="icon" />
+          </div>
         </header>
 
         {/* Mobile search row */}

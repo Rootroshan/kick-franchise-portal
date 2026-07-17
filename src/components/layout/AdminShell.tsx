@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, PanelLeftClose, PanelLeft, Search, Bell, ChevronDown } from "lucide-react";
+import { LogoutButton } from "./LogoutButton";
 import { cn } from "@/lib/utils";
 import { ADMIN_NAV } from "./adminNav";
 
@@ -137,6 +138,7 @@ export function AdminShell({ children, roleLabel, userName, badges }: Props) {
               <div className="truncate text-[10px] text-sidebar-muted">{roleLabel}</div>
             </div>
           </div>
+          <LogoutButton collapsed={collapsed} />
         </div>
       </aside>
 

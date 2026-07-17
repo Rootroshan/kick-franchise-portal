@@ -2,6 +2,7 @@ import { requireRole } from "@/server/modules/identity/guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PushOptIn } from "@/components/franchisee/PushOptIn";
 import { NotificationPrefs } from "@/components/franchisee/NotificationPrefs";
+import { LogoutButton } from "@/components/layout/LogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,10 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">Security</CardTitle></CardHeader>
-        <CardContent className="pt-0">
-          <p className="mb-2 text-sm text-muted-foreground">Your password and sessions are managed through your identity provider.</p>
+        <CardContent className="flex flex-wrap gap-2 pt-0">
+          <p className="mb-1 w-full text-sm text-muted-foreground">Your password and sessions are managed through your identity provider.</p>
           <button className="min-h-11 rounded-md border border-border px-4 text-sm font-medium hover:bg-muted">Change password</button>
+          <LogoutButton variant="light" />
         </CardContent>
       </Card>
     </div>
