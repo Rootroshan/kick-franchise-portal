@@ -38,7 +38,14 @@ export default devBypassEnabled
     }
   : clerkMiddleware(async (authFn, req: NextRequest) => {
       if (!isPublicRoute(req)) {
-        await authFn.protect();
+        const { userId, redirectToSignIn } = await authFn();
+        // A signed-out user hitting a protected route must be REDIRECTED to
+        // sign-in. Bare auth.protect() renders a 404 for page routes in
+        // @clerk/nextjs v5 unless given an unauthenticatedUrl, so we redirect
+        // explicitly to our own /sign-in and preserve the intended return URL.
+        if (!userId) {
+          return redirectToSignIn({ returnBackUrl: req.url });
+        }
       }
       return withHostHeader(req);
     });
