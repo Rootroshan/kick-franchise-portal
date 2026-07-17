@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,7 @@ export function TaskList({ tasks }: { tasks: TaskItem[] }) {
             <CardContent className="flex items-start justify-between gap-3 p-4">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium">{t.title}</p>
+                  <Link href={`/tasks/${t.assignmentId}`} className="font-medium hover:underline">{t.title}</Link>
                   {done && <Badge variant="success">Done</Badge>}
                 </div>
                 {t.details && <p className="text-sm text-muted-foreground">{t.details}</p>}

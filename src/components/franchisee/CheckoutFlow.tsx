@@ -105,8 +105,8 @@ function PaidSuccess({ result }: { result: CheckoutResult }) {
         <p className="text-sm text-muted-foreground">Order #{result.orderId.slice(0, 8)}</p>
         <p className="text-sm">Subtotal: {formatCents(result.subtotalCents)}</p>
         <p className="text-sm">Allowance applied: {formatCents(result.allowanceAppliedCents)}</p>
-        <a href="/orders" className={cn(buttonVariants(), "justify-center")}>
-          View orders
+        <a href={`/checkout/success?order=${result.orderId}`} className={cn(buttonVariants(), "justify-center")}>
+          View confirmation
         </a>
       </CardContent>
     </Card>
@@ -127,7 +127,7 @@ function CardPaymentStep({ result, onPaid }: { result: CheckoutResult; onPaid: (
     setPaymentError(null);
     const { error } = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: `${window.location.origin}/orders` },
+      confirmParams: { return_url: `${window.location.origin}/checkout/success?order=${result.orderId}` },
       redirect: "if_required",
     });
     if (error) {
@@ -145,8 +145,8 @@ function CardPaymentStep({ result, onPaid }: { result: CheckoutResult; onPaid: (
         <CardContent className="flex flex-col gap-2 p-4">
           <p className="text-lg font-semibold">Payment confirmed</p>
           <p className="text-sm text-muted-foreground">Order #{result.orderId.slice(0, 8)}</p>
-          <a href="/orders" className={cn(buttonVariants(), "justify-center")}>
-            View orders
+          <a href={`/checkout/success?order=${result.orderId}`} className={cn(buttonVariants(), "justify-center")}>
+            View confirmation
           </a>
         </CardContent>
       </Card>

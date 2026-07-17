@@ -51,7 +51,9 @@ export function ShopGrid({ products }: { products: Product[] }) {
         {products.map((product) => (
           <Card key={product.productId}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">{product.productName}</CardTitle>
+              <CardTitle className="text-base">
+                <Link href={`/shop/${product.productId}`} className="hover:underline">{product.productName}</Link>
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2 pt-0">
               {product.variants.map((variant) => (

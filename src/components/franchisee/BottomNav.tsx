@@ -9,8 +9,8 @@ const TABS = [
   { href: "/", label: "Feed", icon: Megaphone },
   { href: "/shop", label: "Shop", icon: ShoppingBag },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/onboarding", label: "Onboarding", icon: ListChecks },
-  { href: "/orders", label: "More", icon: User },
+  { href: "/orders", label: "Orders", icon: ListChecks },
+  { href: "/profile", label: "Account", icon: User },
 ];
 
 export function BottomNav() {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { cn, formatCents, formatDateTime } from "@/lib/utils";
 import type { OrderStatus } from "@prisma/client";
 
@@ -95,6 +96,13 @@ export function OrderList({ orders }: { orders: OrderItem[] }) {
                   ))}
                 </div>
               )}
+
+              <Link
+                href={`/orders/${order.id}`}
+                className="flex min-h-11 items-center justify-center gap-1 rounded-md border border-border text-sm font-medium hover:bg-muted"
+              >
+                View details <ChevronRight className="h-4 w-4" />
+              </Link>
             </CardContent>
           </Card>
         );
