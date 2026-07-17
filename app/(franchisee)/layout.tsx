@@ -7,7 +7,7 @@ import { BottomNav } from "@/components/franchisee/BottomNav";
 export default async function FranchiseeLayout({ children }: { children: React.ReactNode }) {
   try {
     const ctx = await getRequestContext();
-    if (ctx.role === "KICK_ADMIN") redirect("/admin/tenants");
+    if (ctx.role === "KICK_ADMIN") redirect("/admin");
     if (ctx.role === "FRANCHISOR_ADMIN") redirect("/franchisor/announcements");
   } catch (err) {
     if (err instanceof HttpError) {

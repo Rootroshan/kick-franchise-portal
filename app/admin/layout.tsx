@@ -6,6 +6,7 @@ import { HttpError } from "@/server/modules/identity/errors";
 import { isDevBypassEnabled } from "@/lib/devBypass";
 
 const NAV = [
+  { href: "/admin", label: "Dashboard" },
   { href: "/admin/tenants", label: "Tenants" },
   { href: "/admin/commerce", label: "Commerce" },
   { href: "/admin/ordering-rules", label: "Ordering Rules" },

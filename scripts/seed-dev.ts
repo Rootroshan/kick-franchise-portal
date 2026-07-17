@@ -102,16 +102,15 @@ async function main() {
       { locationId: LOC_3, grantedCents: 15_000 },
     ];
     for (const g of allowanceGrants) {
-      const allowance = await tx.allowance.upsert({
+      // Initial grant lives in grantedCents only — matching the real
+      // grantAllowance service, which writes a GRANT ledger row ONLY for
+      // additional top-ups on a pre-existing allowance, never the first grant.
+      // (Balance = grantedCents + SUM(ledger deltas); no ledger row here.)
+      await tx.allowance.upsert({
         where: { locationId_periodLabel: { locationId: g.locationId, periodLabel: period } },
         create: { tenantId: TENANT_ID, locationId: g.locationId, periodLabel: period, grantedCents: g.grantedCents, overflow: "CHARGE_CARD", createdBy: "seed" },
         update: { grantedCents: g.grantedCents },
       });
-      // Seed the GRANT ledger entry (balance source of truth) if missing.
-      const hasGrant = await tx.allowanceLedger.findFirst({ where: { allowanceId: allowance.id, reason: "GRANT" } });
-      if (!hasGrant) {
-        await tx.allowanceLedger.create({ data: { allowanceId: allowance.id, deltaCents: g.grantedCents, balanceAfter: g.grantedCents, reason: "GRANT" } });
-      }
     }
 
     // --- Announcements (pinned + scheduled + published) ---
