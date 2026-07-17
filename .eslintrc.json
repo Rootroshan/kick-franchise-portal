@@ -8,6 +8,7 @@
         "app/franchisor/**/*.{ts,tsx}",
         "src/components/franchisor/**/*.{ts,tsx}",
         "src/server/modules/franchisor-dashboard/**/*.{ts,tsx}",
+        "src/server/modules/franchisor-settings/**/*.{ts,tsx}",
         "src/server/modules/engagement/**/*.{ts,tsx}"
       ],
       "rules": {
