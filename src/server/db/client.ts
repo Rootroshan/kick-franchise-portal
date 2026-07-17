@@ -16,6 +16,10 @@ export const prisma =
   globalThis.__prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    // Interactive-transaction limits. Default (5s) is too tight for the seed
+    // and for slower remote (proxied) DB connections; the checkout FOR-UPDATE
+    // path still completes in milliseconds well under this ceiling.
+    transactionOptions: { maxWait: 15_000, timeout: 30_000 },
   });
 
 if (process.env.NODE_ENV !== "production") {
