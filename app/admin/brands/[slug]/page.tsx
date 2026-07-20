@@ -12,6 +12,8 @@ import { PageHeader, KPIStatCard, StatusBadge } from "@/components/admin/kit";
 import { LocationsPanel } from "@/components/admin/LocationsPanel";
 import { DomainsPanel } from "@/components/admin/DomainsPanel";
 import { MembersPanel } from "@/components/admin/MembersPanel";
+import { FranchisorAdminsPanel } from "@/components/admin/FranchisorAdminsPanel";
+import { listFranchisorAdmins } from "./adminActions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +29,11 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
   }
 
   // Interactive panels manage their own add-forms; feed them the initial rows.
-  const [locations, domains, members] = await Promise.all([
+  const [locations, domains, members, franchisorAdmins] = await Promise.all([
     listLocations(ctx, brand.id),
     listCustomDomains(ctx, brand.id),
     listMemberships(ctx, brand.id),
+    listFranchisorAdmins(brand.id),
   ]);
 
   return (
@@ -86,8 +89,14 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
             <LocationsPanel tenantId={brand.id} initialLocations={locations} />
           </div>
 
+          {/* Franchisor admins get their own section: creating one here pins
+              role and tenant server-side, unlike the general Members panel. */}
           <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Members</h2>
+            <FranchisorAdminsPanel tenantId={brand.id} slug={brand.slug} admins={franchisorAdmins} />
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h2 className="mb-3 text-sm font-semibold">All Members</h2>
             <MembersPanel tenantId={brand.id} initialMembers={members} />
           </div>
         </section>

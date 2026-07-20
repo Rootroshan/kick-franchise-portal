@@ -22,9 +22,26 @@ export default async function StoreDetailPage({ params }: { params: { id: string
 
   return (
     <div>
-      <Link href="/admin/stores" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back to Stores
-      </Link>
+      {/* Brands → Brand → Store. The standalone stores list is no longer a
+          destination, so "back" now means back to the owning brand. */}
+      <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center gap-1.5 text-sm">
+        <Link href="/admin/brands" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Brands
+        </Link>
+        <span className="text-muted-foreground" aria-hidden="true">
+          /
+        </span>
+        <Link href={`/admin/brands/${store.brandSlug}`} className="text-muted-foreground hover:text-foreground">
+          {store.brandName}
+        </Link>
+        <span className="text-muted-foreground" aria-hidden="true">
+          /
+        </span>
+        <span className="font-medium text-foreground" aria-current="page">
+          {store.name}
+        </span>
+      </nav>
 
       <PageHeader
         title={store.name}

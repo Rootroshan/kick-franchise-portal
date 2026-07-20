@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Building2,
-  Store,
   Users2,
   ShieldCheck,
   CreditCard,
@@ -31,7 +30,10 @@ export type NavItem = {
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/brands", label: "Brands", icon: Building2 },
-  { href: "/admin/stores", label: "Stores", icon: Store },
+  // Stores is deliberately NOT a top-level item: stores are reached through
+  // their brand (Brands → Brand Detail → Stores → Store Detail). The routes
+  // still exist and /admin/stores redirects to /admin/brands, so existing deep
+  // links and bookmarks keep working.
   { href: "/admin/users", label: "Users", icon: Users2 },
   { href: "/admin/roles", label: "Roles & Permissions", icon: ShieldCheck },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },

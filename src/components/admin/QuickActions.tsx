@@ -10,7 +10,9 @@ import { Building2, Store, Wallet, Package, Megaphone, ClipboardList, Image, Fil
  */
 const ACTIONS = [
   { href: "/admin/brands/new", label: "Create Brand", icon: Building2, tone: "text-status-info" },
-  { href: "/admin/stores", label: "Manage Stores", icon: Store, tone: "text-status-success" },
+  // Stores live inside their brand now, so this points at Brands rather than
+  // the redirected standalone list.
+  { href: "/admin/brands", label: "Manage Stores", icon: Store, tone: "text-status-success" },
   { href: "/admin/allowances", label: "Allowances", icon: Wallet, tone: "text-status-teal" },
   { href: "/admin/commerce", label: "Catalogue", icon: Package, tone: "text-status-info" },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone, tone: "text-status-warning" },

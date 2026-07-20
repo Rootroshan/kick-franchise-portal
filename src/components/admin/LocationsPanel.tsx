@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchJson } from "@/lib/fetchJson";
@@ -37,9 +39,17 @@ export function LocationsPanel({ tenantId, initialLocations }: { tenantId: strin
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-2">
         {locations.map((l) => (
-          <li key={l.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-            <span className="font-medium">{l.name}</span>
-            <span className="text-muted-foreground">{l.address ?? "—"}</span>
+          <li key={l.id}>
+            <Link
+              href={`/admin/stores/${l.id}`}
+              className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">{l.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">{l.address ?? "—"}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
           </li>
         ))}
         {locations.length === 0 && <p className="text-sm text-muted-foreground">No locations yet.</p>}

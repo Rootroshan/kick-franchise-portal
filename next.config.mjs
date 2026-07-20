@@ -15,6 +15,11 @@ const nextConfig = {
       // and every middleware bounce also target). A redirect keeps one real
       // page instead of two that drift apart.
       { source: "/login", destination: "/sign-in", permanent: true },
+      // Stores are managed inside their brand, so the standalone list is gone
+      // from the sidebar. Redirect (not delete) so old bookmarks still land
+      // somewhere useful. /admin/stores/[id] is untouched — deep links to a
+      // specific store keep working.
+      { source: "/admin/stores", destination: "/admin/brands", permanent: false },
     ];
   },
   async headers() {
