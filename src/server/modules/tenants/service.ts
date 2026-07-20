@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { HttpError } from "@/server/modules/identity/errors";
+import { normaliseHostname, verificationRecordName, shortHostLabel } from "./domainNormalise";
+import { cnameTarget, attachDomain, detachDomain, isHostingConfigured } from "./hostingProvider";
 import type { z } from "zod";
 import type {
   createTenantSchema,
@@ -114,12 +116,19 @@ export async function createCustomDomain(ctx: RequestContext, tenantId: string, 
     const tenant = await tx.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new HttpError(404, "Tenant not found");
 
-    const existing = await tx.customDomain.findUnique({ where: { hostname: input.hostname } });
+    // Normalise BEFORE the uniqueness check and before persisting. The stored
+    // value is compared against the request Host header, which is lowercase and
+    // bare — storing "https://Portal.X.com/" would verify but never route.
+    const normalised = normaliseHostname(input.hostname);
+    if (!normalised.ok) throw new HttpError(400, normalised.message);
+    const hostname = normalised.hostname;
+
+    const existing = await tx.customDomain.findUnique({ where: { hostname } });
     if (existing) throw new HttpError(409, "This domain is already registered to a tenant");
 
     const verificationToken = `kick-verify-${randomBytes(16).toString("hex")}`;
     const domain = await tx.customDomain.create({
-      data: { tenantId, hostname: input.hostname, verificationToken, status: "PENDING" },
+      data: { tenantId, hostname, verificationToken, status: "PENDING" },
     });
 
     await writeAuditLog(tx, {
@@ -134,11 +143,26 @@ export async function createCustomDomain(ctx: RequestContext, tenantId: string, 
 
     return {
       domain,
+      // Both records, each labelled by purpose: the TXT proves ownership, the
+      // CNAME routes traffic. Providers disagree on whether the host field
+      // wants the short label or the full name, so both are supplied.
       dnsInstructions: {
-        type: "TXT",
-        name: `_kick-verify.${input.hostname}`,
-        value: verificationToken,
-        cnameTarget: "cname.vercel-dns.com", // Vercel Domains handles ACME/TLS once verified + attached
+        ownership: {
+          type: "TXT" as const,
+          name: verificationRecordName(hostname),
+          shortName: `_kick-verify.${shortHostLabel(hostname)}`,
+          value: verificationToken,
+          ttl: "Auto",
+          purpose: "Proves you own this domain.",
+        },
+        routing: {
+          type: "CNAME" as const,
+          name: hostname,
+          shortName: shortHostLabel(hostname),
+          value: cnameTarget(),
+          ttl: "Auto",
+          purpose: "Routes visitors to the portal.",
+        },
       },
     };
   });
@@ -157,11 +181,27 @@ export async function verifyCustomDomain(ctx: RequestContext, domainId: string) 
 
     const { resolveTxt } = await import("node:dns/promises");
     let verified = false;
+    let failureDetail: string | undefined;
+
     try {
-      const records = await resolveTxt(`_kick-verify.${domain.hostname}`);
+      const records = await resolveTxt(verificationRecordName(domain.hostname));
       verified = records.some((chunks) => chunks.join("").trim() === domain.verificationToken);
+      if (!verified) failureDetail = "A TXT record was found, but its value does not match the token.";
     } catch {
       verified = false;
+      failureDetail = "No TXT record found yet. DNS changes can take a few minutes to propagate.";
+    }
+
+    // Ownership alone does not make a domain reachable: it must also be
+    // registered with the host, which is what triggers certificate issuance.
+    // Skipping this is why a domain could read VERIFIED and still serve
+    // nothing. Failure here does not undo verification — it is reported so the
+    // operator can retry.
+    if (verified && isHostingConfigured()) {
+      const attached = await attachDomain(domain.hostname);
+      if (!attached.ok) failureDetail = `Ownership verified, but hosting setup failed: ${attached.message}`;
+    } else if (verified && !isHostingConfigured()) {
+      failureDetail = "Ownership verified. Attach the domain to the hosting project to start serving traffic.";
     }
 
     const after = await tx.customDomain.update({
@@ -184,9 +224,45 @@ export async function verifyCustomDomain(ctx: RequestContext, domainId: string) 
     });
 
     if (!verified) {
-      throw new HttpError(422, "DNS TXT record not found or does not match. Verify DNS propagation and try again.");
+      // Report WHY: "no record yet" and "record present but wrong value" need
+      // different fixes, and a single generic message sends operators hunting.
+      throw new HttpError(422, failureDetail ?? "DNS TXT record not found or does not match.");
     }
-    return after;
+    // Carries the hosting note when ownership passed but the domain is not yet
+    // serving — the case that previously showed a bare VERIFIED badge.
+    return { ...after, hostingNote: failureDetail };
+  });
+}
+
+/**
+ * Removes a custom domain.
+ *
+ * Detaches from the hosting project first: leaving it attached would keep the
+ * certificate and routing alive for a domain this tenant no longer owns, and
+ * would block another brand from claiming it. Detach failure does not block
+ * the delete — the local record is the source of truth for tenant resolution,
+ * and a stale hosting entry is recoverable.
+ */
+export async function removeCustomDomain(ctx: RequestContext, domainId: string) {
+  const domain = await withTenant(ctx, (tx) => tx.customDomain.findUnique({ where: { id: domainId } }));
+  if (!domain) throw new HttpError(404, "Domain not found");
+
+  if (isHostingConfigured()) {
+    await detachDomain(domain.hostname).catch(() => undefined);
+  }
+
+  return withTenant(ctx, async (tx) => {
+    await tx.customDomain.delete({ where: { id: domainId } });
+    await writeAuditLog(tx, {
+      tenantId: domain.tenantId,
+      actorId: ctx.userId,
+      role: ctx.role,
+      action: "customDomain.remove",
+      entity: "CustomDomain",
+      entityId: domainId,
+      before: { hostname: domain.hostname, status: domain.status },
+    });
+    return { hostname: domain.hostname };
   });
 }
 
