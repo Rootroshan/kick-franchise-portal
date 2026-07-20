@@ -1,7 +1,6 @@
 import { Lock, BarChart3, Users } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { KickWordmark } from "@/components/auth/KickWordmark";
-import { LanguageSelector } from "@/components/auth/LanguageSelector";
 
 // Catch-all so any /sign-in/* path resolves here rather than 404ing.
 // Public — see middleware PUBLIC_PATTERNS.
@@ -68,11 +67,7 @@ export default function SignInPage({
         </aside>
 
         <main className="flex flex-1 flex-col lg:w-1/2">
-          <div className="flex justify-end px-4 py-5 sm:px-8">
-            <LanguageSelector />
-          </div>
-
-          <div className="flex flex-1 flex-col items-center justify-center px-4 pb-10 sm:px-8">
+          <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8">
             {/* Compact mark for small screens, where the left panel is absent. */}
             <div className="mb-8 lg:hidden">
               <KickWordmark />
