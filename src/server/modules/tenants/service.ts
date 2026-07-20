@@ -240,6 +240,93 @@ export async function verifyCustomDomain(ctx: RequestContext, domainId: string) 
   });
 }
 
+export type BrandDeletionBlocker = { kind: string; count: number; label: string };
+
+/**
+ * What would be destroyed if this brand were hard-deleted.
+ *
+ * Tenant cascades to almost every relation, so tenant.delete() would silently
+ * take orders, allowance ledgers and rebate accruals with it. That is financial
+ * history — often legally retained — so it is checked BEFORE the delete, which
+ * is the only moment the cascade can still be stopped.
+ */
+export async function getBrandDeletionBlockers(
+  ctx: RequestContext,
+  tenantId: string
+): Promise<BrandDeletionBlocker[]> {
+  return withTenant(ctx, async (tx) => {
+    const [stores, members, orders, ledger, accruals, domains] = await Promise.all([
+      tx.location.count({ where: { tenantId } }),
+      tx.membership.count({ where: { tenantId } }),
+      tx.order.count({ where: { tenantId } }),
+      tx.allowanceLedger.count({ where: { allowance: { tenantId } } }),
+      tx.rebateAccrual.count({ where: { rebateRule: { tenantId } } }),
+      // Only VERIFIED domains block: a PENDING one is safe to discard, but a
+      // live domain is serving traffic and must be detached deliberately.
+      tx.customDomain.count({ where: { tenantId, status: "VERIFIED" } }),
+    ]);
+
+    const blockers: BrandDeletionBlocker[] = [];
+    if (stores) blockers.push({ kind: "stores", count: stores, label: "store" });
+    if (members) blockers.push({ kind: "members", count: members, label: "member" });
+    if (orders) blockers.push({ kind: "orders", count: orders, label: "order" });
+    if (ledger) blockers.push({ kind: "allowanceLedger", count: ledger, label: "allowance ledger entry" });
+    if (accruals) blockers.push({ kind: "rebateAccruals", count: accruals, label: "rebate accrual" });
+    if (domains) blockers.push({ kind: "domains", count: domains, label: "verified custom domain" });
+    return blockers;
+  });
+}
+
+/**
+ * Permanently deletes a brand — only when nothing of value hangs off it.
+ *
+ * `expectedName` must match the stored name exactly. The client sends what the
+ * operator typed; the comparison happens here against the database row, so a
+ * tampered request cannot skip the confirmation.
+ */
+export async function deleteBrand(ctx: RequestContext, tenantId: string, expectedName: string) {
+  const tenant = await withTenant(ctx, (tx) => tx.tenant.findUnique({ where: { id: tenantId } }));
+  if (!tenant) throw new HttpError(404, "Brand not found");
+
+  if (expectedName.trim() !== tenant.name) {
+    throw new HttpError(400, "The brand name you typed does not match.");
+  }
+
+  const blockers = await getBrandDeletionBlockers(ctx, tenantId);
+  if (blockers.length > 0) {
+    const summary = blockers.map((b) => `${b.count} ${b.label}${b.count === 1 ? "" : "s"}`).join(", ");
+    throw new HttpError(
+      409,
+      `This brand still has ${summary}. Deactivate it instead — deleting would destroy records that must be retained.`
+    );
+  }
+
+  // Only unverified domains can exist at this point; detach them from the host
+  // so the hostname is released rather than left pointing at a dead project.
+  const pending = await withTenant(ctx, (tx) => tx.customDomain.findMany({ where: { tenantId } }));
+  for (const d of pending) {
+    if (isHostingConfigured()) await detachDomain(d.hostname).catch(() => undefined);
+  }
+
+  // Audit BEFORE the delete: the tenant row is about to disappear, and an audit
+  // entry written afterwards would reference a tenant that no longer exists.
+  await withTenant(ctx, async (tx) => {
+    await writeAuditLog(tx, {
+      tenantId,
+      actorId: ctx.userId,
+      role: ctx.role,
+      action: "tenant.delete",
+      entity: "Tenant",
+      entityId: tenantId,
+      before: { name: tenant.name, slug: tenant.slug, status: tenant.status },
+      after: { deletedDomains: pending.map((d) => d.hostname) },
+    });
+  });
+
+  await withTenant(ctx, (tx) => tx.tenant.delete({ where: { id: tenantId } }));
+  return { name: tenant.name };
+}
+
 /**
  * Removes a custom domain.
  *

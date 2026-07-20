@@ -31,7 +31,18 @@ export async function GET(req: Request) {
     }
   }
 
-  const res = NextResponse.redirect(new URL("/sign-in?signed_out=1", req.url));
+  // Return the user to the login page on THEIR host. Building this from
+  // req.url would use the canonical deployment URL on Vercel, ejecting a tenant
+  // user off their own portal on the way out.
+  const host = req.headers.get("host") ?? new URL(req.url).host;
+  const proto = req.headers.get("x-forwarded-proto") ?? "https";
+  const base = (process.env.APP_BASE_DOMAIN ?? "").toLowerCase();
+  const bare = host.split(":")[0]?.toLowerCase() ?? "";
+  const isPlatformHost = !base || bare === base || bare.endsWith(".vercel.app") || bare === "localhost";
+
+  const res = NextResponse.redirect(
+    new URL(`${isPlatformHost ? "/sign-in" : "/portal-login"}?signed_out=1`, `${proto}://${host}`)
+  );
 
   // Belt-and-braces: expire the session cookies directly in case signOut()
   // failed above. Both the plain and __Secure- prefixed names are used

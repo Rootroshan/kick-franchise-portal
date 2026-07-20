@@ -35,12 +35,23 @@ describe("Sign-out flow", () => {
     expect(signOutMock).toHaveBeenCalled();
   });
 
-  it("redirects to the sign-in page with the signed-out flag", async () => {
+  it("returns a tenant user to the branded login on their OWN host", async () => {
+    // Building the redirect from req.url would use the canonical deployment
+    // URL on Vercel and eject the user onto *.vercel.app mid sign-out.
     const res = await callSignOut();
     expect(res.status).toBe(307);
     const location = res.headers.get("location") ?? "";
-    expect(location).toContain("/sign-in");
+    expect(location).toContain("portal.example.com");
+    expect(location).toContain("/portal-login");
     expect(location).toContain("signed_out=1");
+  });
+
+  it("returns a platform user to the KICK admin login", async () => {
+    const { GET } = await import("@/app/sign-out/route");
+    const res = await GET(new Request("https://kick-franchise-portal.vercel.app/sign-out"));
+    const location = res.headers.get("location") ?? "";
+    expect(location).toContain("/sign-in");
+    expect(location).not.toContain("/portal-login");
   });
 
   it("expires the session cookie", async () => {

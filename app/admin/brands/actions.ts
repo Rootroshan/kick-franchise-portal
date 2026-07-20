@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/server/modules/identity/guard";
-import { updateTenant } from "@/server/modules/tenants/service";
+import { updateTenant, deleteBrand, getBrandDeletionBlockers } from "@/server/modules/tenants/service";
 import { updateTenantSchema } from "@/server/modules/tenants/schemas";
 
 export type ActionResult = { ok: boolean; message: string };

@@ -71,7 +71,20 @@ export default devBypassEnabled
   : auth((req) => {
       const isProtected = !isPublicRoute(req);
       if (isProtected && !req.auth?.user?.id) {
-        const url = new URL("/sign-in", req.nextUrl.origin);
+        // Build the redirect from the Host header, NOT req.nextUrl.origin: on
+        // Vercel the latter resolves to the canonical deployment URL, so a
+        // visitor on portal.brand.com would be thrown onto the *.vercel.app
+        // host — off their own portal, mid sign-in.
+        const host = req.headers.get("host") ?? req.nextUrl.host;
+        const proto = req.headers.get("x-forwarded-proto") ?? "https";
+
+        // A custom domain or brand subdomain is a tenant portal and gets the
+        // branded login; the platform host gets the KICK admin login.
+        const base = (process.env.APP_BASE_DOMAIN ?? "").toLowerCase();
+        const bare = host.split(":")[0]?.toLowerCase() ?? "";
+        const isPlatformHost = !base || bare === base || bare.endsWith(".vercel.app") || bare === "localhost";
+
+        const url = new URL(isPlatformHost ? "/sign-in" : "/portal-login", `${proto}://${host}`);
         url.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
         return NextResponse.redirect(url);
       }
