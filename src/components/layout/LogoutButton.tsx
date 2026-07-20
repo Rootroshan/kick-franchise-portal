@@ -37,9 +37,9 @@ export function LogoutButton({
       <button
         onClick={signOut}
         className="inline-flex min-h-11 items-center gap-2 rounded-md border border-status-error/30 px-4 text-sm font-medium text-status-error hover:bg-status-error/5"
-        aria-label="Sign out"
+        aria-label="Logout"
       >
-        <LogOut className="h-4 w-4" aria-hidden="true" /> Sign out
+        <LogOut className="h-4 w-4" aria-hidden="true" /> Logout
       </button>
     );
   }
@@ -49,8 +49,8 @@ export function LogoutButton({
       <button
         onClick={signOut}
         className="rounded-md p-1.5 text-foreground hover:bg-muted"
-        aria-label="Sign out"
-        title="Sign out"
+        aria-label="Logout"
+        title="Logout"
       >
         <LogOut className="h-5 w-5" aria-hidden="true" />
       </button>
@@ -64,11 +64,11 @@ export function LogoutButton({
         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-muted hover:bg-white/5 hover:text-white",
         collapsed && "lg:justify-center lg:px-0"
       )}
-      aria-label="Sign out"
-      title="Sign out"
+      aria-label="Logout"
+      title="Logout"
     >
       <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-      <span className={cn(collapsed && "lg:hidden")}>Sign out</span>
+      <span className={cn(collapsed && "lg:hidden")}>Logout</span>
     </button>
   );
 }

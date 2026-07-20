@@ -36,9 +36,19 @@ export async function GET(req: Request) {
   // Belt-and-braces: expire the session cookies directly in case signOut()
   // failed above. Both the plain and __Secure- prefixed names are used
   // depending on whether the deployment is served over HTTPS.
-  for (const name of ["authjs.session-token", "__Secure-authjs.session-token"]) {
-    res.cookies.set(name, "", { maxAge: 0, path: "/" });
-  }
+  //
+  // `secure: true` on the prefixed cookie is LOAD-BEARING, not hygiene: the
+  // browser silently ignores any Set-Cookie for a __Secure-* name that lacks
+  // the Secure attribute, so without it the deletion never happens and the
+  // user stays signed in — logout appears to do nothing.
+  res.cookies.set("authjs.session-token", "", { maxAge: 0, path: "/", httpOnly: true, sameSite: "lax" });
+  res.cookies.set("__Secure-authjs.session-token", "", {
+    maxAge: 0,
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: true,
+  });
 
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
   res.headers.set("Pragma", "no-cache");

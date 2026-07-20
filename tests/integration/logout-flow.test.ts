@@ -51,6 +51,18 @@ describe("Sign-out flow", () => {
     expect(setCookie).toContain("Max-Age=0");
   });
 
+  it("clears the __Secure- cookie WITH the Secure attribute", async () => {
+    // Browsers silently ignore a Set-Cookie for a __Secure-* name that lacks
+    // the Secure attribute — without it the deletion never happens on HTTPS
+    // and logout appears to do nothing. This is the production cookie name,
+    // so this assertion is what actually guards logout in prod.
+    const res = await callSignOut();
+    const secureCookie = res.headers.getSetCookie().find((c) => c.startsWith("__Secure-authjs.session-token="));
+    expect(secureCookie).toBeDefined();
+    expect(secureCookie).toMatch(/Secure/i);
+    expect(secureCookie).toContain("Max-Age=0");
+  });
+
   it("sends no-store so the back button cannot show a cached page", async () => {
     const res = await callSignOut();
     const cc = res.headers.get("cache-control") ?? "";
