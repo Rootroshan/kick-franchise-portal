@@ -1,6 +1,19 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
+import {
+  useFloating,
+  autoUpdate,
+  offset,
+  flip,
+  shift,
+  useDismiss,
+  useRole,
+  useInteractions,
+  useListNavigation,
+  FloatingPortal,
+  FloatingFocusManager,
+} from "@floating-ui/react";
 import {
   MoreVertical,
   UserCircle,
@@ -199,6 +212,24 @@ export function UsersTable({
 
 type MenuPick = "view" | "edit" | "access" | "reset" | "delete" | "toggle";
 
+/**
+ * Row action menu.
+ *
+ * Rendered through a portal to document.body: the table is inside an
+ * `overflow-x-auto` container, which clips any absolutely-positioned child, so
+ * a menu on the last row was cut off.
+ *
+ * Positioning uses Floating UI rather than hand-rolled maths:
+ *  - `flip()` opens the menu ABOVE the trigger when there is not enough room
+ *    below (the reported bug), and back below when there is.
+ *  - `shift()` keeps it inside the viewport horizontally on narrow screens.
+ *  - `autoUpdate` re-runs positioning on scroll and resize — it listens on
+ *    every scrollable ancestor, so scrolling the table itself is covered too.
+ *
+ * `useDismiss` handles outside-click and Escape; `useListNavigation` gives
+ * arrow-key movement, and FloatingFocusManager traps focus and restores it to
+ * the trigger on close.
+ */
 function RowMenu({
   user,
   isSelf,
@@ -212,26 +243,56 @@ function RowMenu({
   onToggle: () => void;
   onPick: (kind: MenuPick) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const listRef = useRef<Array<HTMLButtonElement | null>>([]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onToggle();
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onToggle();
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onToggle]);
+  const { refs, floatingStyles, context } = useFloating({
+    open,
+    onOpenChange: (next) => {
+      if (!next) onToggle();
+    },
+    placement: "bottom-end",
+    // Position against the viewport so the portalled menu tracks the trigger
+    // regardless of which ancestor scrolls.
+    strategy: "fixed",
+    middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  });
+
+  const dismiss = useDismiss(context);
+  const role = useRole(context, { role: "menu" });
+  const listNav = useListNavigation(context, {
+    listRef,
+    activeIndex,
+    onNavigate: setActiveIndex,
+    loop: true,
+  });
+  const { getReferenceProps, getFloatingProps, getItemProps } = useInteractions([dismiss, role, listNav]);
+
+  const items: Array<{ icon: typeof UserCircle; label: string; kind: MenuPick; destructive?: boolean }> = [
+    { icon: UserCircle, label: "View Profile", kind: "view" },
+    { icon: Pencil, label: "Edit User", kind: "edit" },
+    { icon: ShieldCheck, label: "Manage Access", kind: "access" },
+    { icon: KeyRound, label: "Reset Password", kind: "reset" },
+    // Self-destructive actions are hidden on your own row; the server rejects
+    // them regardless — this is presentation, not the control.
+    ...(isSelf
+      ? []
+      : [
+          {
+            icon: user.isActive ? AlertTriangle : ShieldCheck,
+            label: user.isActive ? "Deactivate" : "Activate",
+            kind: "toggle" as MenuPick,
+          },
+          { icon: Trash2, label: "Delete User", kind: "delete" as MenuPick, destructive: true },
+        ]),
+  ];
 
   return (
-    <div ref={ref} className="relative inline-block">
+    <>
       <button
-        onClick={onToggle}
+        ref={refs.setReference}
+        {...getReferenceProps({ onClick: onToggle })}
         className="rounded-md p-1.5 hover:bg-muted"
         aria-label={`Actions for ${user.name ?? user.email}`}
         aria-expanded={open}
@@ -240,51 +301,36 @@ function RowMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg">
-          <MenuItem icon={UserCircle} label="View Profile" onClick={() => onPick("view")} />
-          <MenuItem icon={Pencil} label="Edit User" onClick={() => onPick("edit")} />
-          <MenuItem icon={ShieldCheck} label="Manage Access" onClick={() => onPick("access")} />
-          <MenuItem icon={KeyRound} label="Reset Password" onClick={() => onPick("reset")} />
-          {/* Self-destructive actions are hidden for your own row; the server
-              rejects them regardless. */}
-          {!isSelf && (
-            <>
-              <MenuItem
-                icon={user.isActive ? AlertTriangle : ShieldCheck}
-                label={user.isActive ? "Deactivate" : "Activate"}
-                onClick={() => onPick("toggle")}
-              />
-              <MenuItem icon={Trash2} label="Delete User" destructive onClick={() => onPick("delete")} />
-            </>
-          )}
-        </div>
+        <FloatingPortal>
+          <FloatingFocusManager context={context} modal={false} initialFocus={-1} returnFocus>
+            <div
+              ref={refs.setFloating}
+              style={floatingStyles}
+              {...getFloatingProps()}
+              className="z-50 w-48 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
+            >
+              {items.map((item, i) => (
+                <button
+                  key={item.kind}
+                  ref={(node) => {
+                    listRef.current[i] = node;
+                  }}
+                  {...getItemProps({ onClick: () => onPick(item.kind) })}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted",
+                    activeIndex === i && "bg-muted",
+                    item.destructive && "text-status-error"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </FloatingFocusManager>
+        </FloatingPortal>
       )}
-    </div>
-  );
-}
-
-function MenuItem({
-  icon: Icon,
-  label,
-  onClick,
-  destructive,
-}: {
-  icon: typeof UserCircle;
-  label: string;
-  onClick: () => void;
-  destructive?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted",
-        destructive && "text-status-error"
-      )}
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      {label}
-    </button>
+    </>
   );
 }
 
