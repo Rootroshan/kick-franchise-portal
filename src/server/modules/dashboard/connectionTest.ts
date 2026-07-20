@@ -1,6 +1,6 @@
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import Stripe from "stripe";
-import { getEnv } from "@/lib/env";
+import { getSetting } from "@/server/modules/settings/platformSettings";
 
 export type TestResult = {
   ok: boolean;
@@ -21,8 +21,8 @@ export type TestResult = {
  */
 
 export async function testStripe(): Promise<TestResult> {
-  const key = getEnv().STRIPE_SECRET_KEY;
-  if (!key) return { ok: false, message: "No key set. Add STRIPE_SECRET_KEY, then redeploy." };
+  const key = await getSetting("STRIPE_SECRET_KEY");
+  if (!key) return { ok: false, message: "No key set. Add a Stripe secret key above and save." };
 
   try {
     const stripe = new Stripe(key, { apiVersion: "2025-02-24.acacia" });
@@ -62,31 +62,39 @@ function describeStripeError(err: unknown): string {
 }
 
 export async function testR2(): Promise<TestResult> {
-  const env = getEnv();
+  const [accountId, accessKeyId, secretAccessKey, endpointOverride, bucketSetting] = await Promise.all([
+    getSetting("R2_ACCOUNT_ID"),
+    getSetting("R2_ACCESS_KEY_ID"),
+    getSetting("R2_SECRET_ACCESS_KEY"),
+    getSetting("R2_ENDPOINT"),
+    getSetting("R2_BUCKET"),
+  ]);
+  const bucket = bucketSetting || "kick-assets";
+
   const missing = [
-    !env.R2_ACCOUNT_ID && "R2_ACCOUNT_ID",
-    !env.R2_ACCESS_KEY_ID && "R2_ACCESS_KEY_ID",
-    !env.R2_SECRET_ACCESS_KEY && "R2_SECRET_ACCESS_KEY",
+    !accountId && "R2_ACCOUNT_ID",
+    !accessKeyId && "R2_ACCESS_KEY_ID",
+    !secretAccessKey && "R2_SECRET_ACCESS_KEY",
   ].filter(Boolean) as string[];
 
   if (missing.length) {
     return { ok: false, message: `Not configured. Missing: ${missing.join(", ")}.` };
   }
 
-  const endpoint = env.R2_ENDPOINT || `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const endpoint = endpointOverride || `https://${accountId}.r2.cloudflarestorage.com`;
 
   try {
     const client = new S3Client({
       region: "auto",
       endpoint,
-      credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+      credentials: { accessKeyId, secretAccessKey },
     });
     // HeadBucket verifies credentials AND that this token can see the bucket —
     // a token scoped to a different bucket fails here rather than at upload time.
-    await client.send(new HeadBucketCommand({ Bucket: env.R2_BUCKET }));
-    return { ok: true, message: "Connected to R2.", detail: `Bucket "${env.R2_BUCKET}" is reachable.` };
+    await client.send(new HeadBucketCommand({ Bucket: bucket }));
+    return { ok: true, message: "Connected to R2.", detail: `Bucket "${bucket}" is reachable.` };
   } catch (err) {
-    return { ok: false, message: describeR2Error(err, env.R2_BUCKET) };
+    return { ok: false, message: describeR2Error(err, bucket) };
   }
 }
 

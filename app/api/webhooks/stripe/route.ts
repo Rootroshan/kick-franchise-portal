@@ -1,6 +1,6 @@
 import { stripeClient } from "@/server/lib/stripe";
 import { withTenant, systemKickContext } from "@/server/db/withTenant";
-import { getEnv } from "@/lib/env";
+import { getSetting } from "@/server/modules/settings/platformSettings";
 import { markOrderPaid, markOrderFailed, refundOrder, getOrderByPaymentIntentId } from "@/server/modules/commerce/orderLifecycle";
 import type Stripe from "stripe";
 
@@ -14,7 +14,6 @@ export const runtime = "nodejs";
  * at-least-once delivery.
  */
 export async function POST(req: Request) {
-  const env = getEnv();
   const signature = req.headers.get("stripe-signature");
   if (!signature) {
     return Response.json({ error: "Missing signature" }, { status: 400 });
@@ -23,7 +22,10 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   let event: Stripe.Event;
   try {
-    event = stripeClient().webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
+    // Signing secret resolves from the DB first (admin settings), then env —
+    // matching how the client key is resolved, so both rotate together.
+    const signingSecret = await getSetting("STRIPE_WEBHOOK_SECRET");
+    event = (await stripeClient()).webhooks.constructEvent(rawBody, signature, signingSecret);
   } catch (err) {
     console.error("Stripe webhook signature verification failed:", err);
     return Response.json({ error: "Invalid signature" }, { status: 400 });

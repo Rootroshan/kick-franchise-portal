@@ -98,14 +98,14 @@ enum NotificationCategory {
 // ---------- Tenancy ----------
 
 model Tenant {
-  id           String   @id @default(uuid())
-  name         String
-  slug         String   @unique // brandx -> brandx.portal.kickmedia.com
-  clerkOrgId   String?  @unique // Clerk Organization id backing this tenant (spec §9)
-  status       String   @default("active")
-  theme        Json     @default("{}") // { logoUrl, primary, secondary, font }
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  slug       String   @unique // brandx -> brandx.portal.kickmedia.com
+  clerkOrgId String?  @unique // Clerk Organization id backing this tenant (spec §9)
+  status     String   @default("active")
+  theme      Json     @default("{}") // { logoUrl, primary, secondary, font }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   locations           Location[]
   memberships         Membership[]
@@ -128,50 +128,50 @@ model Tenant {
 }
 
 model CustomDomain {
-  id            String       @id @default(uuid())
-  tenantId      String
-  hostname      String       @unique
-  status        DomainStatus @default(PENDING)
+  id                String       @id @default(uuid())
+  tenantId          String
+  hostname          String       @unique
+  status            DomainStatus @default(PENDING)
   verificationToken String
-  verifiedAt    DateTime?
-  createdAt     DateTime     @default(now())
-  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  verifiedAt        DateTime?
+  createdAt         DateTime     @default(now())
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
 
 model Location {
-  id            String   @id @default(uuid())
-  tenantId      String
-  name          String
-  address       String?
-  status        String   @default("active")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  address   String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant              Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships         Membership[]
-  orders              Order[]
-  allowances          Allowance[]
-  orderingRules       LocationOrderingRule[]
-  onboardingProgress  OnboardingProgress[]
-  taskAssignments     TaskAssignment[]
-  announcementAcks    AnnouncementAck[]
-  notifications       Notification[]
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships        Membership[]
+  orders             Order[]
+  allowances         Allowance[]
+  orderingRules      LocationOrderingRule[]
+  onboardingProgress OnboardingProgress[]
+  taskAssignments    TaskAssignment[]
+  announcementAcks   AnnouncementAck[]
+  notifications      Notification[]
 
   @@index([tenantId])
 }
 
 model Membership {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   clerkUserId String
   tenantId    String?
   locationId  String?
   role        Role
   displayName String?
   email       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -336,9 +336,9 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  variants    ProductVariant[]
-  rebateRules RebateRule[]
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants      ProductVariant[]
+  rebateRules   RebateRule[]
   orderingRules LocationOrderingRule[]
 
   @@unique([tenantId, sku])
@@ -375,7 +375,7 @@ model LocationOrderingRule {
   createdAt   DateTime @default(now())
 
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([locationId])
   @@index([productId])
@@ -499,16 +499,16 @@ model RebateAccrual {
 }
 
 model RebateReport {
-  id            String             @id @default(uuid())
-  tenantId      String
-  period        RebateReportPeriod
-  periodLabel   String // "2026-06" or "2026-Q2"
-  salesTotalCents Int
+  id               String             @id @default(uuid())
+  tenantId         String
+  period           RebateReportPeriod
+  periodLabel      String // "2026-06" or "2026-Q2"
+  salesTotalCents  Int
   rebateTotalCents Int
-  breakdownJson Json // per-product and per-store breakdown
-  csvStorageKey String?
-  pdfStorageKey String?
-  generatedAt   DateTime           @default(now())
+  breakdownJson    Json // per-product and per-store breakdown
+  csvStorageKey    String?
+  pdfStorageKey    String?
+  generatedAt      DateTime           @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -564,12 +564,12 @@ model Notification {
   tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
+  /// Prevents duplicate notifications for the same event+recipient.
+  @@unique([clerkUserId, entity, entityId, category])
   /// Unread-count and inbox queries both hit (clerkUserId, readAt, createdAt).
   @@index([clerkUserId, readAt, createdAt])
   @@index([tenantId])
   @@index([locationId])
-  /// Prevents duplicate notifications for the same event+recipient.
-  @@unique([clerkUserId, entity, entityId, category])
 }
 
 model AuditLog {
@@ -597,4 +597,23 @@ model ProcessedStripeEvent {
   id          String   @id // Stripe event id, e.g. evt_...
   type        String
   processedAt DateTime @default(now())
+}
+
+/// Platform-level integration credentials entered through the admin UI.
+///
+/// SECURITY: `valueEnc` is AES-256-GCM ciphertext, never plaintext. The key
+/// lives in SETTINGS_ENCRYPTION_KEY (env) and is deliberately NOT stored in
+/// this database — a leaked dump therefore yields only ciphertext. `lastFour`
+/// exists so the UI can show which key is set (sk_live_...4242) without ever
+/// decrypting or returning the secret to the browser.
+///
+/// Rows are platform-wide (no tenantId): one Stripe account, one R2 bucket.
+/// RLS restricts all access to KICK_ADMIN (see prisma/rls.sql).
+model PlatformSetting {
+  key       String   @id // e.g. "STRIPE_SECRET_KEY"
+  valueEnc  String // AES-256-GCM: iv:authTag:ciphertext (base64)
+  lastFour  String? // display hint only, never the full secret
+  updatedBy String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }

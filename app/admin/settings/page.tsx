@@ -3,42 +3,21 @@ import { Settings as SettingsIcon, Database, ShieldCheck, Server, HardDrive, Cre
 import { requireRole } from "@/server/modules/identity/guard";
 import { getSystemHealth, getStorageUsage } from "@/server/modules/dashboard/health";
 import { PageHeader } from "@/components/admin/kit";
-import { IntegrationSetup, type SetupStep } from "@/components/admin/IntegrationSetup";
+import { IntegrationSetup, type SetupField } from "@/components/admin/IntegrationSetup";
+import { listSettingStatus } from "@/server/modules/settings/platformSettings";
 
-const STRIPE_STEPS: SetupStep[] = [
-  {
-    title: "Open your Stripe API keys",
-    body: "Sign in to Stripe and copy the Secret key. Use a test key until you are ready to take real payments.",
-    link: { label: "Stripe API keys", href: "https://dashboard.stripe.com/apikeys" },
-  },
-  {
-    title: "Create a webhook endpoint",
-    body: "Point it at https://<your-domain>/api/webhooks/stripe and copy the signing secret it gives you.",
-    link: { label: "Stripe webhooks", href: "https://dashboard.stripe.com/webhooks" },
-  },
-  {
-    title: "Add both values to your hosting environment",
-    body: "Set them in Vercel (Project → Settings → Environment Variables), then redeploy for the change to take effect.",
-    link: { label: "Vercel environment variables", href: "https://vercel.com/dashboard" },
-  },
+const STRIPE_FIELDS: SetupField[] = [
+  { key: "STRIPE_SECRET_KEY", label: "Secret key", hint: "sk_live_… or sk_test_…", secret: true },
+  { key: "STRIPE_WEBHOOK_SECRET", label: "Webhook signing secret", hint: "whsec_…", secret: true },
+  { key: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY", label: "Publishable key", hint: "pk_live_… or pk_test_…", secret: false },
 ];
 
-const R2_STEPS: SetupStep[] = [
-  {
-    title: "Create an R2 bucket",
-    body: "In Cloudflare, create a bucket for artwork and note its name and your account ID.",
-    link: { label: "Cloudflare R2", href: "https://dash.cloudflare.com/?to=/:account/r2" },
-  },
-  {
-    title: "Create an API token",
-    body: "Create an R2 API token with Object Read & Write for that bucket, then copy the Access Key ID and Secret Access Key.",
-    link: { label: "R2 API tokens", href: "https://dash.cloudflare.com/?to=/:account/r2/api-tokens" },
-  },
-  {
-    title: "Add the values to your hosting environment",
-    body: "Set them in Vercel (Project → Settings → Environment Variables), then redeploy for the change to take effect.",
-    link: { label: "Vercel environment variables", href: "https://vercel.com/dashboard" },
-  },
+const R2_FIELDS: SetupField[] = [
+  { key: "R2_ACCOUNT_ID", label: "Account ID", hint: "Cloudflare account ID", secret: false },
+  { key: "R2_ACCESS_KEY_ID", label: "Access key ID", secret: true },
+  { key: "R2_SECRET_ACCESS_KEY", label: "Secret access key", secret: true },
+  { key: "R2_BUCKET", label: "Bucket name", hint: "kick-assets", secret: false },
+  { key: "R2_ENDPOINT", label: "Endpoint (optional)", hint: "Leave blank to derive from account ID", secret: false },
 ];
 
 export const dynamic = "force-dynamic";
@@ -54,10 +33,14 @@ const SERVICE_ICON: Record<string, React.ComponentType<{ className?: string }>> 
 };
 
 export default async function SettingsPage() {
-  await requireRole("KICK_ADMIN")();
+  const ctx = await requireRole("KICK_ADMIN")();
   // Independent reads — run concurrently so the storage rollup doesn't add
   // its latency on top of the health checks.
-  const [health, storage] = await Promise.all([getSystemHealth(), getStorageUsage()]);
+  const [health, storage, settingStatus] = await Promise.all([
+    getSystemHealth(),
+    getStorageUsage(),
+    listSettingStatus(ctx),
+  ]);
 
   return (
     <div>
@@ -85,16 +68,18 @@ export default async function SettingsPage() {
             <IntegrationSetup
               service="stripe"
               title="Stripe"
-              configured={health.services.find((s) => s.name === "Stripe")?.status === "ok"}
-              envVars={["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"]}
-              steps={STRIPE_STEPS}
+              docsHref="https://dashboard.stripe.com/apikeys"
+              docsLabel="Get your keys from the Stripe dashboard"
+              fields={STRIPE_FIELDS}
+              statuses={settingStatus}
             />
             <IntegrationSetup
               service="r2"
               title="Cloudflare R2"
-              configured={health.services.find((s) => s.name === "R2 Storage")?.status === "ok"}
-              envVars={["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET", "R2_ENDPOINT"]}
-              steps={R2_STEPS}
+              docsHref="https://dash.cloudflare.com/?to=/:account/r2/api-tokens"
+              docsLabel="Create an R2 API token in Cloudflare"
+              fields={R2_FIELDS}
+              statuses={settingStatus}
             />
           </div>
 

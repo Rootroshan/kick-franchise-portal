@@ -126,7 +126,7 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
     let clientSecret: string | null = null;
     let stripePaymentIntentId: string | null = null;
     if (remainderCents > 0) {
-      const intent = await stripeClient().paymentIntents.create(
+      const intent = await (await stripeClient()).paymentIntents.create(
         {
           amount: remainderCents,
           currency: "cad",

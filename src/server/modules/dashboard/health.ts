@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db/client";
 import { getEnv } from "@/lib/env";
+import { getSetting } from "@/server/modules/settings/platformSettings";
 
 export type ServiceHealth = { name: string; status: "ok" | "degraded" | "down" | "not_configured" };
 
@@ -76,13 +77,20 @@ export async function getSystemHealth(): Promise<{ services: ServiceHealth[]; ve
 
   const configured = (v: string): ServiceHealth["status"] => (v ? "ok" : "not_configured");
 
+  // Stripe/R2 may be configured via admin settings (DB) rather than env, so
+  // resolve through getSetting() instead of reading env directly.
+  const [stripeKey, r2Key] = await Promise.all([
+    getSetting("STRIPE_SECRET_KEY").catch(() => ""),
+    getSetting("R2_ACCESS_KEY_ID").catch(() => ""),
+  ]);
+
   return {
     services: [
       { name: "Database", status: dbStatus },
       { name: "RLS Security", status: rlsStatus },
       { name: "Redis / Worker", status: configured(env.REDIS_URL) },
-      { name: "R2 Storage", status: configured(env.R2_ACCESS_KEY_ID) },
-      { name: "Stripe", status: configured(env.STRIPE_SECRET_KEY) },
+      { name: "R2 Storage", status: configured(r2Key) },
+      { name: "Stripe", status: configured(stripeKey) },
       { name: "Push (VAPID)", status: configured(env.VAPID_PUBLIC_KEY) },
       { name: "Email (Resend)", status: configured(env.RESEND_API_KEY) },
     ],

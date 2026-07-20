@@ -576,3 +576,15 @@ CREATE POLICY processed_stripe_event_system ON "ProcessedStripeEvent" FOR ALL
 -- ============================================================================
 -- (No further action needed: policies above use USING+WITH CHECK combos covering
 -- SELECT/UPDATE/DELETE/INSERT per table as annotated.)
+
+-- ---------- PlatformSetting ----------
+-- Platform-wide integration credentials (encrypted). KICK_ADMIN only: there is
+-- no tenant scoping because there is one Stripe account / one R2 bucket for the
+-- whole platform. FORCE RLS so the policy applies even to the table owner.
+ALTER TABLE "PlatformSetting" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PlatformSetting" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS platform_setting_kick_only ON "PlatformSetting";
+CREATE POLICY platform_setting_kick_only ON "PlatformSetting" FOR ALL
+  USING (current_setting('app.user_role', true) = 'KICK_ADMIN')
+  WITH CHECK (current_setting('app.user_role', true) = 'KICK_ADMIN');

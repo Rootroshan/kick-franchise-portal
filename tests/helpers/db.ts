@@ -22,6 +22,9 @@ export function franchiseeCtx(tenantId: string, locationId: string, userId = "te
 /** Wipes all tenant-owned tables between tests. Runs as KICK_ADMIN via the privileged path (raw client, bypasses RLS via superuser DIRECT connection is NOT used here — deletes go through the app role, so KICK_ADMIN context is required). */
 export async function resetDatabase() {
   await withTenant(kickCtx(), async (tx) => {
+    // Platform-wide, no FK references — safe to clear first. Must be reset or
+    // a row from one test leaks into the next and collides on the primary key.
+    await tx.platformSetting.deleteMany();
     await tx.rebateAccrual.deleteMany();
     await tx.rebateReport.deleteMany();
     await tx.rebateRule.deleteMany();
