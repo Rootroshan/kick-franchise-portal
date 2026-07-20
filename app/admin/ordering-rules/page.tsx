@@ -5,6 +5,7 @@ import { listProducts } from "@/server/modules/commerce/products";
 import { withTenant } from "@/server/db/withTenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderingRulesPanel } from "@/components/admin/OrderingRulesPanel";
+import { CatalogueTabs } from "@/components/admin/CatalogueTabs";
 
 export default async function OrderingRulesPage() {
   const ctx = await requireRole("KICK_ADMIN")();
@@ -44,6 +45,9 @@ export default async function OrderingRulesPage() {
         <h1 className="text-2xl font-bold">Ordering Rules</h1>
         <p className="text-sm text-muted-foreground">Min/max quantity and cadence constraints per location.</p>
       </div>
+      {/* Same tab strip as Catalogue: this route is a Catalogue section, not a
+          separate destination, but keeps its own URL so deep links still work. */}
+      <CatalogueTabs />
       <Card>
         <CardHeader>
           <CardTitle>Rules</CardTitle>
