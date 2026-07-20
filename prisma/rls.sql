@@ -501,7 +501,25 @@ CREATE POLICY audit_log_kick_read ON "AuditLog" FOR SELECT
     -- This does NOT grant general audit-log browsing to franchisees/franchisors
     -- beyond their own actor id; it only unblocks the RETURNING clause for
     -- their own insert.
-    OR "actorId" = current_setting('app.user_id', true)
+    --
+    -- The commerce-entity exclusion is repeated here, but ONLY for
+    -- FRANCHISOR_ADMIN. Rationale:
+    --   * FRANCHISEE_USER legitimately writes commerce audit rows (checkout
+    --     writes an Order row), so it must keep the unrestricted readback or
+    --     every checkout fails on the RETURNING clause.
+    --   * FRANCHISOR_ADMIN must never read commerce rows (P0 lockout). Without
+    --     this guard, a franchisor sharing an actorId with a commerce write
+    --     (dev-bypass, support/impersonation, or any id collision) could read
+    --     commerce audit rows through this clause — bypassing the entity
+    --     filter above. Found in QA; see tests/lockout/audit-log-actor-clause.
+    --   * KICK_ADMIN is already fully covered by the first clause.
+    OR (
+      "actorId" = current_setting('app.user_id', true)
+      AND (
+        current_setting('app.user_role', true) <> 'FRANCHISOR_ADMIN'
+        OR entity NOT IN ('Product', 'ProductVariant', 'Order', 'OrderLine', 'Allowance', 'AllowanceLedger', 'RebateRule', 'RebateAccrual', 'LocationOrderingRule')
+      )
+    )
   );
 -- Audit logs are insert-only from the trusted server context; never updatable/deletable
 -- via the app role at all (no UPDATE/DELETE policy exists -> both denied outright).

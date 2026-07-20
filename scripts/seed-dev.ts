@@ -246,7 +246,7 @@ async function main() {
     const existingOrder = await tx.order.findUnique({ where: { idempotencyKey: orderKey } });
     if (!existingOrder) {
       const subtotal = coffeeVariant.priceCents * 3 + cupVariant.priceCents * 1; // 3 coffee + 1 cups box
-      await tx.order.create({
+      const order = await tx.order.create({
         data: {
           tenantId: TENANT_ID,
           locationId: LOC_1,
@@ -264,6 +264,23 @@ async function main() {
           },
         },
       });
+
+      // Mirror what real checkout does (see commerce/checkout.ts): an order that
+      // consumes allowance MUST write the matching append-only ORDER_DEBIT row.
+      // Without it, granted/used/balance disagree with the order and the
+      // "Allowance Used" KPI reads $0 despite a fully allowance-funded order.
+      const loc1Allowance = await tx.allowance.findFirst({ where: { locationId: LOC_1, periodLabel: period } });
+      if (loc1Allowance) {
+        await tx.allowanceLedger.create({
+          data: {
+            allowanceId: loc1Allowance.id,
+            orderId: order.id,
+            deltaCents: -subtotal, // negative = debit
+            balanceAfter: loc1Allowance.grantedCents - subtotal,
+            reason: "ORDER_DEBIT",
+          },
+        });
+      }
     }
   });
 
