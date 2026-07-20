@@ -3,6 +3,7 @@ import { Globe, ArrowRight, AlertTriangle, CheckCircle2, Clock } from "lucide-re
 import { formatCents } from "@/lib/utils";
 import { parseTenantTheme } from "@/lib/theme";
 import type { BrandRow } from "@/server/modules/tenants/brands";
+import { BrandRowMenu } from "@/components/admin/BrandRowMenu";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,13 +58,16 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
                 <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{formatCents(b.revenueCents)}</td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(b.createdAt)}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/admin/brands/${b.slug}`}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
-                  >
-                    View Details
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Link>
+                  <div className="flex items-center justify-end gap-2">
+                    <Link
+                      href={`/admin/brands/${b.slug}`}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
+                    >
+                      View Details
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+                    <BrandRowMenu brand={b} />
+                  </div>
                 </td>
               </tr>
             ))}
