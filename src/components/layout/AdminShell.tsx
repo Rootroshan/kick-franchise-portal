@@ -56,8 +56,10 @@ export function AdminShell({ children, roleLabel, userName, badges }: Props) {
 
   const sidebarWidth = collapsed ? "lg:w-16" : "lg:w-64";
 
+  // scrollbar-hide: the nav still scrolls (it outgrew the viewport once Users
+  // was added), but the track is hidden to match the rest of the app.
   const NavList = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
+    <nav className="scrollbar-hide flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
       {ADMIN_NAV.map((item) => {
         const active = isActive(pathname, item.href);
         const Icon = item.icon;
