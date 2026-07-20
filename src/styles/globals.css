@@ -78,6 +78,61 @@
   }
 }
 
+/* ============================================================================
+   Focus styling — remove the ring/glow/offset from form controls and buttons.
+   ============================================================================
+   Kills the visual focus ring on POINTER interaction (clicking an input or
+   button no longer glows), which is what this is for.
+
+   Keyboard focus is deliberately preserved via :focus-visible below. The
+   browser only matches :focus-visible for keyboard/assistive navigation, never
+   for a plain mouse click — so this gets the clean look without stranding
+   keyboard users (WCAG 2.4.7). Delete the :focus-visible block to remove it
+   everywhere, accepting that trade-off.
+
+   Borders, validation styles (:invalid, aria-invalid) and behaviour are
+   untouched. */
+/* Declared inside @layer utilities so these land AFTER Tailwind's own
+   focus:ring-* / focus-visible:ring-* utilities in the cascade — otherwise the
+   --tw-ring-* variable resets below get re-set by the later utility rules. */
+@layer utilities {
+  input,
+  textarea,
+  select,
+  button,
+  [role="button"],
+  [contenteditable="true"] {
+    outline: none;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus,
+  [role="button"]:focus,
+  [contenteditable="true"]:focus {
+    outline: none !important;
+    outline-offset: 0 !important;
+    box-shadow: none !important;
+    /* Neutralise Tailwind's ring utilities (they render via box-shadow vars). */
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-width: 0px !important;
+  }
+
+  /* Keyboard-only focus indicator. Restores a clear, minimal outline for users
+     navigating by Tab so the UI stays operable without a mouse. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  [contenteditable="true"]:focus-visible {
+    outline: 2px solid hsl(var(--ring)) !important;
+    outline-offset: 2px !important;
+  }
+}
+
 /* Hide scrollbars visually while keeping scroll fully functional (wheel,
    trackpad, touch, keyboard, programmatic). Never uses overflow:hidden. */
 .scrollbar-hide {
