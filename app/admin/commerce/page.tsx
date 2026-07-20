@@ -8,6 +8,7 @@ import { PageHeader, KPIStatCard, StatusBadge, Pagination } from "@/components/a
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { CatalogueTabs } from "@/components/admin/CatalogueTabs";
+import { CreateProductDialog } from "@/components/admin/ProductDialogs";
 import type { ProductRow } from "@/server/modules/commerce/admin";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,10 @@ export default async function CataloguePage({ searchParams }: { searchParams: Re
       <PageHeader title="Catalogue" description="Every product and variant across all brands. Commerce is Kick-controlled." />
 
       <CatalogueTabs />
+
+      <div className="mb-4 flex justify-end">
+        <CreateProductDialog brandOptions={brandOptions} />
+      </div>
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KPIStatCard label="Products" value={kpis.products} icon={Package} tone="info" />
