@@ -16,13 +16,34 @@ export default function SignInPage({
   const callbackUrl = safeCallback(searchParams.callbackUrl);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-app-bg">
-      {/* Decorative diagonal bands, matching the reference. aria-hidden +
-          pointer-events-none: pure decoration, never in the way. Rotated divs
-          rather than an image so they scale to any viewport with no asset. */}
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#dde3f7] via-[#e9edf9] to-[#f7f8fd]">
+      {/* Decorative background matching the supplied art: a large white
+          chevron on the left, a diagonal band toward the top-right, and dot
+          grids in opposite corners. Recreated in CSS (rotated bars + radial-
+          gradient dots) rather than shipping the image — it scales to any
+          viewport, costs no request, and stays crisp on retina. aria-hidden +
+          pointer-events-none: pure decoration, never in the way. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-[30%] -top-[45%] h-[90%] w-[85%] rotate-[24deg] bg-white/60 shadow-sm" />
-        <div className="absolute -left-[42%] -top-[30%] h-[85%] w-[80%] rotate-[24deg] bg-black/[0.03]" />
+        {/* Chevron: two thick bars meeting at a point, like a check mark. */}
+        <div className="absolute left-[-14%] top-[26%] h-[9vw] w-[32vw] min-w-[300px] rotate-45 bg-white/70" />
+        <div className="absolute left-[9%] top-[34%] h-[9vw] w-[42vw] min-w-[380px] -rotate-45 bg-white/70" />
+        {/* Diagonal band running up toward the top-right. */}
+        <div className="absolute left-[18%] top-[-6%] h-[6vw] w-[70vw] -rotate-[16deg] bg-white/50" />
+        {/* Dot grids, top-right and bottom-left. */}
+        <div
+          className="absolute right-8 top-8 h-28 w-40 opacity-70"
+          style={{
+            backgroundImage: "radial-gradient(circle, rgba(129,140,248,0.35) 2.5px, transparent 2.5px)",
+            backgroundSize: "22px 22px",
+          }}
+        />
+        <div
+          className="absolute bottom-10 left-8 h-36 w-32 opacity-70"
+          style={{
+            backgroundImage: "radial-gradient(circle, rgba(129,140,248,0.35) 2.5px, transparent 2.5px)",
+            backgroundSize: "22px 22px",
+          }}
+        />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-[1400px] flex-col lg:flex-row">
