@@ -1,43 +1,90 @@
-import { CheckCircle2 } from "lucide-react";
+import { Lock, BarChart3, Users, ShieldCheck } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { KickWordmark } from "@/components/auth/KickWordmark";
+import { LanguageSelector } from "@/components/auth/LanguageSelector";
 
 // Catch-all so any /sign-in/* path resolves here rather than 404ing.
 // Public — see middleware PUBLIC_PATTERNS.
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { signed_out?: string };
+  searchParams: { signed_out?: string; callbackUrl?: string; error?: string };
 }) {
-  // Set by /sign-out after the session is revoked and the cookies are cleared.
   const signedOut = searchParams.signed_out === "1";
+  // Set by the middleware when it bounces an unauthenticated request, so the
+  // user lands back where they were headed after signing in.
+  const callbackUrl = safeCallback(searchParams.callbackUrl);
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-bg">
-      <header className="flex items-center px-4 py-5 sm:px-8">
-        <span className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-active text-sm font-black text-sidebar-active-foreground">
-            K
-          </span>
-          <span className="text-sm font-bold">KICK</span>
-        </span>
-      </header>
+    <div className="min-h-screen bg-app-bg">
+      <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col lg:flex-row">
+        {/* Marketing panel — desktop only. Removed from the DOM on small
+            screens rather than visually hidden, so screen readers reach the
+            form immediately and mobile pays no markup cost. */}
+        <aside className="hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:gap-10 lg:px-14 xl:px-20">
+          <KickWordmark />
 
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-16">
-        {signedOut && (
-          <div
-            role="status"
-            className="flex w-full max-w-[420px] items-center gap-2 rounded-lg bg-status-success/10 px-3 py-2.5 text-sm font-medium text-status-success"
-          >
-            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Logged out successfully
+          <div>
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-status-info/10">
+              <ShieldCheck className="h-5 w-5 text-status-info" aria-hidden="true" />
+            </span>
+            <h1 className="mt-6 text-4xl font-bold tracking-tight">Welcome Back 👋</h1>
+            <p className="mt-3 max-w-sm text-base text-muted-foreground">
+              Sign in to access your super admin dashboard and manage everything.
+            </p>
           </div>
-        )}
-        <LoginForm />
-      </main>
 
-      <footer className="px-4 pb-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} KICK Franchise Portal
-      </footer>
+          <ul className="flex flex-col gap-5">
+            {FEATURES.map((f) => (
+              <li key={f.title} className="flex items-start gap-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-card shadow-sm">
+                  <f.Icon className="h-5 w-5 text-status-info" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold">{f.title}</span>
+                  <span className="mt-0.5 block max-w-xs text-sm text-muted-foreground">{f.body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <main className="flex flex-1 flex-col lg:w-1/2">
+          <div className="flex justify-end px-4 py-5 sm:px-8">
+            <LanguageSelector />
+          </div>
+
+          <div className="flex flex-1 flex-col items-center justify-center px-4 pb-10 sm:px-8">
+            {/* Compact mark for small screens, where the left panel is absent. */}
+            <div className="mb-8 lg:hidden">
+              <KickWordmark />
+            </div>
+
+            <LoginForm signedOut={signedOut} callbackUrl={callbackUrl} authError={searchParams.error} />
+
+            <p className="mt-8 text-center text-xs text-muted-foreground">
+              © {new Date().getFullYear()} KICK Media Group. All rights reserved.
+            </p>
+          </div>
+        </main>
+      </div>
     </div>
   );
+}
+
+const FEATURES = [
+  { Icon: Lock, title: "Secure Access", body: "Your data is protected with enterprise-grade security." },
+  { Icon: BarChart3, title: "Real-time Insights", body: "Track performance and make smarter decisions." },
+  { Icon: Users, title: "Complete Control", body: "Manage brands, stores, users and operations seamlessly." },
+] as const;
+
+/**
+ * Only same-origin relative paths are accepted as a post-login destination.
+ * An absolute URL here would turn the login page into an open redirect —
+ * ?callbackUrl=https://evil.example lands the user off-site after signing in.
+ */
+function safeCallback(raw: string | undefined): string {
+  if (!raw) return "/admin";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/admin";
+  return raw;
 }

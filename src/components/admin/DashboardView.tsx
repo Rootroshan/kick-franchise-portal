@@ -13,16 +13,12 @@ import {
   Truck,
   ArrowUpRight,
   ArrowDownRight,
-  CheckCircle2,
   AlertTriangle,
-  XCircle,
-  MinusCircle,
 } from "lucide-react";
 import { formatCents, formatDateTime } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { QuickActions } from "@/components/admin/QuickActions";
 import type { DashboardData } from "@/server/modules/dashboard/service";
-import type { ServiceHealth } from "@/server/modules/dashboard/health";
 
 // Charts are client-only + heavy → dynamic import (spec §23).
 const RevenueBarChart = dynamic(() => import("@/components/charts/RevenueBarChart").then((m) => m.RevenueBarChart), {
@@ -79,20 +75,7 @@ function SectionTitle({ title, sub, href, hrefLabel }: { title: string; sub?: st
   );
 }
 
-const healthDot: Record<ServiceHealth["status"], { cls: string; Icon: typeof CheckCircle2 }> = {
-  ok: { cls: "text-status-success", Icon: CheckCircle2 },
-  degraded: { cls: "text-status-warning", Icon: AlertTriangle },
-  down: { cls: "text-status-error", Icon: XCircle },
-  not_configured: { cls: "text-muted-foreground", Icon: MinusCircle },
-};
-
-export function DashboardView({
-  data,
-  health,
-}: {
-  data: DashboardData;
-  health: { services: ServiceHealth[]; version: string; environment: string };
-}) {
+export function DashboardView({ data }: { data: DashboardData }) {
   const ar = data.allowanceRebate;
   const allowancePct = ar.allowanceGrantedCents > 0 ? Math.round((ar.allowanceUsedCents / ar.allowanceGrantedCents) * 100) : 0;
 
@@ -265,54 +248,16 @@ export function DashboardView({
           </div>
         </Card>
 
+        {/* Recent Activity and Platform Health were removed by request —
+            audit detail lives at /admin/audit-log, service health at
+            /admin/settings. Quick Actions keeps the right-hand column. */}
         <div className="flex flex-col gap-6">
-          <Card>
-            <SectionTitle title="Recent Activity" sub="Latest privileged actions (audit log)." href="/admin/audit-log" />
-            <ul className="flex flex-col gap-2.5">
-              {data.activity.length === 0 && <li className="text-sm text-muted-foreground">No activity yet.</li>}
-              {data.activity.map((a) => (
-                <li key={a.id} className="flex items-start gap-2 text-sm">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-status-info" />
-                  <div className="min-w-0">
-                    <div className="truncate">
-                      <span className="font-medium">{a.action}</span>{" "}
-                      <span className="text-muted-foreground">on {a.entity}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {a.tenantName ? `${a.tenantName} · ` : ""}
-                      {formatDateTime(a.createdAt)}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
           <Card>
             <SectionTitle title="Quick Actions" sub="Shortcuts to common admin functions." />
             <QuickActions />
           </Card>
         </div>
       </div>
-
-      {/* ---- SYSTEM HEALTH ---- */}
-      <section>
-        <SectionTitle title="Platform Health" sub={`Environment: ${health.environment} · v${health.version}`} />
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-          {health.services.map((s) => {
-            const { cls, Icon } = healthDot[s.status];
-            return (
-              <div key={s.name} className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-                <Icon className={`h-4 w-4 shrink-0 ${cls}`} />
-                <div className="min-w-0">
-                  <div className="truncate text-xs font-medium">{s.name}</div>
-                  <div className="text-[10px] capitalize text-muted-foreground">{s.status.replace(/_/g, " ")}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
     </div>
   );
 }

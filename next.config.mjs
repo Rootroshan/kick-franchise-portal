@@ -8,6 +8,15 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  async redirects() {
+    return [
+      // /login is the path people reach for and it is referenced in operator
+      // docs; the actual page lives at /sign-in (which NextAuth's `pages.signIn`
+      // and every middleware bounce also target). A redirect keeps one real
+      // page instead of two that drift apart.
+      { source: "/login", destination: "/sign-in", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {
