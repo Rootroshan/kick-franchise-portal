@@ -1,4 +1,4 @@
-import { Lock, BarChart3, Users, ShieldCheck } from "lucide-react";
+import { Lock, BarChart3, Users } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { KickWordmark } from "@/components/auth/KickWordmark";
 import { LanguageSelector } from "@/components/auth/LanguageSelector";
@@ -25,10 +25,7 @@ export default function SignInPage({
           <KickWordmark />
 
           <div>
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-status-info/10">
-              <ShieldCheck className="h-5 w-5 text-status-info" aria-hidden="true" />
-            </span>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight">Welcome Back 👋</h1>
+            <h1 className="text-4xl font-bold tracking-tight">Welcome Back 👋</h1>
             <p className="mt-3 max-w-sm text-base text-muted-foreground">
               Sign in to access your super admin dashboard and manage everything.
             </p>
