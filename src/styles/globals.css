@@ -120,15 +120,29 @@
     --tw-ring-offset-width: 0px !important;
   }
 
-  /* Keyboard-only focus indicator. Restores a clear, minimal outline for users
-     navigating by Tab so the UI stays operable without a mouse. */
+  /* Accessible focus indicator, kept deliberately subtle.
+     NOTE: text inputs/textareas match :focus-visible on a plain mouse click
+     too (per spec — keyboard input is expected there), so this IS visible when
+     clicking a field. It must therefore stay light-touch: a 1px brand-tinted
+     border-colour change rather than a heavy outline. Using --ring here would
+     paint near-black (222 47% 11%), which reads as a thick black box. */
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible,
+  [contenteditable="true"]:focus-visible {
+    outline: none !important;
+    /* --tenant-primary-rgb is set per-brand by src/lib/theme.ts as "r, g, b";
+       the fallback is the default slate primary (#111827). */
+    border-color: rgb(var(--tenant-primary-rgb, 17 24 39) / 0.5) !important;
+  }
+
+  /* Buttons and non-input controls only show the indicator for real keyboard
+     navigation (they don't match :focus-visible on click), so a visible ring
+     is appropriate and won't appear during normal mouse use. */
   button:focus-visible,
   [role="button"]:focus-visible,
-  [contenteditable="true"]:focus-visible {
-    outline: 2px solid hsl(var(--ring)) !important;
+  a:focus-visible {
+    outline: 2px solid rgb(var(--tenant-primary-rgb, 17 24 39) / 0.6) !important;
     outline-offset: 2px !important;
   }
 }
