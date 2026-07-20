@@ -138,11 +138,34 @@ export type BrandDetail = {
   status: string;
   createdAt: Date;
   theme: Record<string, unknown>;
+  tagline: string | null;
   hqAddress: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
-  stores: Array<{ id: string; name: string; address: string | null; status: string }>;
+  /**
+   * Stores with their manager and member count. Manager is derived from
+   * Membership rather than stored on Location: a store's manager IS a member
+   * assigned to it, so duplicating the name would let the two disagree.
+   */
+  stores: Array<{
+    id: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    status: string;
+    managerName: string | null;
+    managerEmail: string | null;
+    memberCount: number;
+  }>;
+  /** Recent privileged actions for this brand, newest first. */
+  activity: Array<{
+    id: string;
+    action: string;
+    entity: string;
+    actorId: string;
+    createdAt: Date;
+  }>;
   members: Array<{ id: string; displayName: string | null; email: string | null; role: string }>;
   orderCount: number;
   revenueCents: number;
@@ -164,10 +187,33 @@ export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise
     });
     if (!t) throw new HttpError(404, "Brand not found");
 
-    const orders = await tx.order.findMany({ where: { tenantId: t.id }, select: { status: true, subtotalCents: true, refundedCents: true } });
+    const [orders, activity] = await Promise.all([
+      tx.order.findMany({ where: { tenantId: t.id }, select: { status: true, subtotalCents: true, refundedCents: true } }),
+      // Recent privileged actions for THIS brand only. AuditLog is already
+      // tenant-scoped by RLS; the explicit filter keeps intent obvious.
+      tx.auditLog.findMany({
+        where: { tenantId: t.id },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        select: { id: true, action: true, entity: true, actorId: true, createdAt: true },
+      }),
+    ]);
     const revenueCents = orders.filter((o) => PAID.includes(o.status)).reduce((s, o) => s + netRevenue(o), 0);
 
+    // Members per store, and the manager for each. The manager is whichever
+    // member holds the store — derived, not stored, so a renamed member cannot
+    // leave a stale manager name behind.
+    const byLocation = new Map<string, typeof t.memberships>();
+    for (const m of t.memberships) {
+      if (!m.locationId) continue;
+      const list = byLocation.get(m.locationId) ?? [];
+      list.push(m);
+      byLocation.set(m.locationId, list);
+    }
+
     return {
+      tagline: t.tagline,
+      activity,
       hqAddress: t.hqAddress,
       phone: t.phone,
       email: t.email,
@@ -178,7 +224,22 @@ export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise
       status: t.status,
       createdAt: t.createdAt,
       theme: (t.theme as Record<string, unknown>) ?? {},
-      stores: t.locations.map((l) => ({ id: l.id, name: l.name, address: l.address, status: l.status })),
+      stores: t.locations.map((l) => {
+        const staff = byLocation.get(l.id) ?? [];
+        // A store's "manager" is its franchisor-level member if one is
+        // assigned there, otherwise the first member — never a stored copy.
+        const manager = staff.find((m) => m.role === "FRANCHISOR_ADMIN") ?? staff[0];
+        return {
+          id: l.id,
+          name: l.name,
+          address: l.address,
+          phone: l.phone,
+          status: l.status,
+          managerName: manager?.displayName ?? null,
+          managerEmail: manager?.email ?? null,
+          memberCount: staff.length,
+        };
+      }),
       members: t.memberships.map((m) => ({ id: m.id, displayName: m.displayName, email: m.email, role: m.role })),
       orderCount: orders.length,
       revenueCents,

@@ -106,6 +106,7 @@ model Tenant {
   theme      Json     @default("{}") // { logoUrl, primary, secondary, font }
   /// Brand contact details, shown on Brand Detail. All nullable: brands
   /// created before these existed have none, and none is a valid state.
+  tagline    String?
   hqAddress  String?
   phone      String?
   email      String?
@@ -151,6 +152,9 @@ model Location {
   tenantId  String
   name      String
   address   String?
+  /// Store contact number. Nullable — stores created before this existed have
+  /// none, and a store without a listed phone is valid.
+  phone     String?
   status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

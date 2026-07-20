@@ -5,11 +5,11 @@ import { parseTenantTheme } from "@/lib/theme";
 import { EditBrandDialog } from "@/components/admin/EditBrandDialog";
 import { requireRole } from "@/server/modules/identity/guard";
 import { getBrandBySlug } from "@/server/modules/tenants/brands";
-import { listLocations, listCustomDomains, listMemberships } from "@/server/modules/tenants/service";
+import { listCustomDomains, listMemberships } from "@/server/modules/tenants/service";
 import { HttpError } from "@/server/modules/identity/errors";
 import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge } from "@/components/admin/kit";
-import { LocationsPanel } from "@/components/admin/LocationsPanel";
+import { StoresPanel } from "@/components/admin/StoresPanel";
 import { DomainsPanel } from "@/components/admin/DomainsPanel";
 import { MembersPanel } from "@/components/admin/MembersPanel";
 import { FranchisorAdminsPanel } from "@/components/admin/FranchisorAdminsPanel";
@@ -29,8 +29,7 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
   }
 
   // Interactive panels manage their own add-forms; feed them the initial rows.
-  const [locations, domains, members, franchisorAdmins] = await Promise.all([
-    listLocations(ctx, brand.id),
+  const [domains, members, franchisorAdmins] = await Promise.all([
     listCustomDomains(ctx, brand.id),
     listMemberships(ctx, brand.id),
     listFranchisorAdmins(brand.id),
@@ -44,7 +43,7 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
 
       <PageHeader
         title={brand.name}
-        description={`${brand.slug} · created ${brand.createdAt.toLocaleDateString()}`}
+        description={`${brand.slug} · Created ${brand.createdAt.toLocaleDateString("en-CA", { day: "2-digit", month: "short", year: "numeric" })} · ID ${brand.id.slice(0, 8).toUpperCase()}`}
         secondaryAction={<StatusBadge status={brand.status} />}
         action={
           <EditBrandDialog
@@ -84,9 +83,8 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2 flex flex-col gap-6">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Stores</h2>
-            <LocationsPanel tenantId={brand.id} initialLocations={locations} />
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <StoresPanel tenantId={brand.id} slug={brand.slug} stores={brand.stores} />
           </div>
 
           {/* Franchisor admins get their own section: creating one here pins
@@ -107,12 +105,43 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
             <DomainsPanel tenantId={brand.id} initialDomains={domains} />
           </div>
 
-          <h2 className="mb-2 mt-6 text-sm font-semibold">Theme</h2>
-          <div className="rounded-xl border border-border bg-card p-4 text-sm">
-            <ThemeRow label="Primary" value={brand.theme.primary as string | undefined} swatch />
-            <ThemeRow label="Secondary" value={brand.theme.secondary as string | undefined} swatch />
-            <ThemeRow label="Font" value={brand.theme.font as string | undefined} />
-            <ThemeRow label="Logo" value={brand.theme.logoUrl ? "Set" : "Not set"} />
+          <h2 className="mb-2 mt-6 text-sm font-semibold">Theme &amp; Branding</h2>
+          <div className="rounded-xl border border-border bg-card p-4 text-sm shadow-sm">
+            <ThemeRow label="Primary Color" value={brand.theme.primary as string | undefined} swatch />
+            <ThemeRow label="Secondary Color" value={brand.theme.secondary as string | undefined} swatch />
+            <ThemeRow label="Font Family" value={brand.theme.font as string | undefined} />
+            <ThemeRow label="Logo" value={logoFilename(brand.theme.logoUrl as string | undefined)} />
+          </div>
+
+          {/* Brand-scoped audit trail. Sourced from AuditLog, which is already
+              tenant-scoped by RLS — no separate activity table to drift. */}
+          <h2 className="mb-2 mt-6 text-sm font-semibold">Recent Activity</h2>
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            {brand.activity.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {brand.activity.map((a) => (
+                  <li key={a.id} className="flex items-start gap-2.5 text-sm">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-status-info" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-foreground">{describeAudit(a.action, a.entity)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(a.createdAt).toLocaleString("en-CA", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link href="/admin/audit-log" className="mt-3 inline-block text-xs font-medium text-status-info hover:underline">
+              View all activity →
+            </Link>
           </div>
         </section>
       </div>
@@ -172,4 +201,26 @@ function InfoField({
       </div>
     </div>
   );
+}
+
+/** Filename from a logo URL, so the panel shows "logo.png" not a long URL. */
+function logoFilename(url?: string): string {
+  if (!url) return "Not set";
+  try {
+    return new URL(url).pathname.split("/").pop() || "Set";
+  } catch {
+    return "Set";
+  }
+}
+
+/** Human phrasing for an audit row: "product.update on Product" reads poorly. */
+function describeAudit(action: string, entity: string): string {
+  const verb = action.split(".").pop() ?? action;
+  const past: Record<string, string> = {
+    create: "created", update: "updated", delete: "deleted",
+    verify: "verified", remove: "removed", activate: "activated",
+    deactivate: "deactivated", status_change: "status changed",
+    access_change: "access changed", password_reset: "password reset",
+  };
+  return `${entity} ${past[verb] ?? verb}`;
 }
