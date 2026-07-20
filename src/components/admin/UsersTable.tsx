@@ -52,10 +52,14 @@ export function UsersTable({
   currentUserId: string;
   brandOptions: Option[];
 }) {
+  // Keyed "<layout>:<userId>", not just the user id. The desktop table and the
+  // mobile card list are BOTH mounted at all times — Tailwind only toggles
+  // their visibility with `hidden`/`md:hidden`, which is display:none, not
+  // unmounting. A plain user-id key therefore matched a row in each tree and
+  // opened two menus; the hidden one had a display:none trigger, so Floating UI
+  // measured a zero rect and parked it in the top-left corner.
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<{ kind: "view" | "edit" | "access" | "reset" | "delete"; user: UserRow } | null>(
-    null
-  );
+  const [dialog, setDialog] = useState<{ kind: MenuPick; user: UserRow } | null>(null);
   const [banner, setBanner] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -124,15 +128,13 @@ export function UsersTable({
                   <RowMenu
                     user={u}
                     isSelf={u.id === currentUserId}
-                    open={openMenu === u.id}
-                    onToggle={() => setOpenMenu(openMenu === u.id ? null : u.id)}
+                    open={openMenu === `desktop:${u.id}`}
+                    onSetOpen={(next) => setOpenMenu(next ? `desktop:${u.id}` : null)}
                     onPick={(kind) => {
                       setOpenMenu(null);
-                      if (kind === "toggle") {
-                        run(() => setUserActiveAction(u.id, !u.isActive));
-                      } else {
-                        setDialog({ kind, user: u });
-                      }
+                      // Every action — including status change — goes through a
+                      // dialog so nothing destructive happens on a single click.
+                      setDialog({ kind, user: u });
                     }}
                   />
                 </td>
@@ -157,8 +159,8 @@ export function UsersTable({
               <RowMenu
                 user={u}
                 isSelf={u.id === currentUserId}
-                open={openMenu === u.id}
-                onToggle={() => setOpenMenu(openMenu === u.id ? null : u.id)}
+                open={openMenu === `mobile:${u.id}`}
+                onSetOpen={(next) => setOpenMenu(next ? `mobile:${u.id}` : null)}
                 onPick={(kind) => {
                   setOpenMenu(null);
                   if (kind === "toggle") run(() => setUserActiveAction(u.id, !u.isActive));
@@ -194,6 +196,14 @@ export function UsersTable({
             <ResetForm
               pending={pending}
               onSubmit={(pw, confirm) => run(() => resetPasswordAction(dialog.user.id, pw, confirm))}
+            />
+          )}
+          {dialog.kind === "toggle" && (
+            <ConfirmStatus
+              user={dialog.user}
+              pending={pending}
+              onConfirm={() => run(() => setUserActiveAction(dialog.user.id, !dialog.user.isActive))}
+              onCancel={() => setDialog(null)}
             />
           )}
           {dialog.kind === "delete" && (
@@ -234,13 +244,14 @@ function RowMenu({
   user,
   isSelf,
   open,
-  onToggle,
+  onSetOpen,
   onPick,
 }: {
   user: UserRow;
   isSelf: boolean;
   open: boolean;
-  onToggle: () => void;
+  /** Explicit next state, not a toggle — see onOpenChange below. */
+  onSetOpen: (next: boolean) => void;
   onPick: (kind: MenuPick) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -248,9 +259,11 @@ function RowMenu({
 
   const { refs, floatingStyles, context } = useFloating({
     open,
-    onOpenChange: (next) => {
-      if (!next) onToggle();
-    },
+    // Floating UI already tells us the intended next state. Forwarding it
+    // verbatim keeps this idempotent — an earlier version called a blind
+    // toggle() here AND from the trigger's onClick, so dismissing one menu to
+    // open another fired twice and cancelled itself out.
+    onOpenChange: (next) => onSetOpen(next),
     placement: "bottom-end",
     // Position against the viewport so the portalled menu tracks the trigger
     // regardless of which ancestor scrolls.
@@ -292,7 +305,13 @@ function RowMenu({
     <>
       <button
         ref={refs.setReference}
-        {...getReferenceProps({ onClick: onToggle })}
+        {...getReferenceProps({
+          onClick: (e) => {
+            // Stop the row/card click handler from also firing.
+            e.stopPropagation();
+            onSetOpen(!open);
+          },
+        })}
         className="rounded-md p-1.5 hover:bg-muted"
         aria-label={`Actions for ${user.name ?? user.email}`}
         aria-expanded={open}
@@ -315,7 +334,18 @@ function RowMenu({
                   ref={(node) => {
                     listRef.current[i] = node;
                   }}
-                  {...getItemProps({ onClick: () => onPick(item.kind) })}
+                  role="menuitem"
+                  tabIndex={activeIndex === i ? 0 : -1}
+                  {...getItemProps({
+                    onClick: (e) => {
+                      // stopPropagation so the click cannot also reach the row;
+                      // close before acting so the menu is never left hanging
+                      // over a modal.
+                      e.stopPropagation();
+                      onSetOpen(false);
+                      onPick(item.kind);
+                    },
+                  })}
                   className={cn(
                     "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-muted",
                     activeIndex === i && "bg-muted",
@@ -363,6 +393,7 @@ function dialogTitle(kind: string, user: UserRow): string {
     case "edit": return `Edit ${who}`;
     case "access": return `Manage access — ${who}`;
     case "reset": return `Reset password — ${who}`;
+    case "toggle": return user.isActive ? `Deactivate ${who}?` : `Activate ${who}?`;
     default: return `Delete ${who}?`;
   }
 }
@@ -491,6 +522,53 @@ function ResetForm({ pending, onSubmit }: { pending: boolean; onSubmit: (pw: str
         Reset password
       </button>
     </form>
+  );
+}
+
+function ConfirmStatus({
+  user,
+  pending,
+  onConfirm,
+  onCancel,
+}: {
+  user: UserRow;
+  pending: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const deactivating = user.isActive;
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        {deactivating ? (
+          <>
+            <strong className="text-foreground">{user.email}</strong> will be signed out immediately and blocked from
+            signing in. Their data and history are kept.
+          </>
+        ) : (
+          <>
+            <strong className="text-foreground">{user.email}</strong> will be able to sign in again with their existing
+            credentials.
+          </>
+        )}
+      </p>
+      <div className="flex gap-2">
+        <button onClick={onCancel} disabled={pending} className="min-h-10 flex-1 rounded-md border border-border text-sm font-medium hover:bg-muted disabled:opacity-60">
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={pending}
+          className={cn(
+            "inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md text-sm font-semibold text-white hover:opacity-95 disabled:opacity-60",
+            deactivating ? "bg-status-warning" : "bg-status-success"
+          )}
+        >
+          {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+          {deactivating ? "Deactivate" : "Activate"}
+        </button>
+      </div>
+    </div>
   );
 }
 
