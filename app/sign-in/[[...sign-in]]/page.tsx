@@ -17,19 +17,11 @@ export default function SignInPage({
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#dde3f7] via-[#e9edf9] to-[#f7f8fd]">
-      {/* Decorative background matching the supplied art: a large white
-          chevron on the left, a diagonal band toward the top-right, and dot
-          grids in opposite corners. Recreated in CSS (rotated bars + radial-
-          gradient dots) rather than shipping the image — it scales to any
-          viewport, costs no request, and stays crisp on retina. aria-hidden +
+      {/* Decorative background: soft gradient plus dot grids in opposite
+          corners (radial-gradient patterns — no image asset). The white
+          chevron/band shapes were removed by request. aria-hidden +
           pointer-events-none: pure decoration, never in the way. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        {/* Chevron: two thick bars meeting at a point, like a check mark. */}
-        <div className="absolute left-[-14%] top-[26%] h-[9vw] w-[32vw] min-w-[300px] rotate-45 bg-white/70" />
-        <div className="absolute left-[9%] top-[34%] h-[9vw] w-[42vw] min-w-[380px] -rotate-45 bg-white/70" />
-        {/* Diagonal band running up toward the top-right. */}
-        <div className="absolute left-[18%] top-[-6%] h-[6vw] w-[70vw] -rotate-[16deg] bg-white/50" />
-        {/* Dot grids, top-right and bottom-left. */}
         <div
           className="absolute right-8 top-8 h-28 w-40 opacity-70"
           style={{
