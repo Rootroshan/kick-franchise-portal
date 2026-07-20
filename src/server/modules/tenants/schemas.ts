@@ -28,7 +28,16 @@ export const updateTenantSchema = z.object({
   hqAddress: z.string().max(500).optional(),
   phone: z.string().max(50).optional(),
   email: z.string().email().or(z.literal("")).optional(),
-  website: z.string().url().or(z.literal("")).optional(),
+  // url() alone accepts javascript: and data: — both are well-formed URLs and
+  // both become stored XSS the moment the value is rendered into an href.
+  // Restricting the scheme here is the authoritative check; the render site
+  // re-checks as defence in depth.
+  website: z
+    .string()
+    .url()
+    .refine((v) => /^https?:\/\//i.test(v), "Website must start with http:// or https://")
+    .or(z.literal(""))
+    .optional(),
   theme: z
     .object({
       logoUrl: z.string().url().optional(),

@@ -135,6 +135,11 @@ function InfoField({
   value: string | null;
   href?: string | null;
 }) {
+  // Defence in depth: the schema rejects non-http(s) schemes on write, but rows
+  // stored before that check exist and would still render javascript: as a
+  // clickable href. Anything not http(s) degrades to plain text.
+  const safeHref = href && /^https?:\/\//i.test(href) ? href : undefined;
+
   return (
     <div className="flex items-start gap-2.5">
       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -144,8 +149,8 @@ function InfoField({
         <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
         <dd className="text-sm font-medium text-foreground">
           {value ? (
-            href ? (
-              <a href={href} target="_blank" rel="noopener noreferrer" className="text-status-info hover:underline">
+            safeHref ? (
+              <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-status-info hover:underline">
                 {value}
               </a>
             ) : (
