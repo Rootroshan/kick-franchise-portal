@@ -16,8 +16,16 @@ export default function SignInPage({
   const callbackUrl = safeCallback(searchParams.callbackUrl);
 
   return (
-    <div className="min-h-screen bg-app-bg">
-      <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col lg:flex-row">
+    <div className="relative min-h-screen overflow-hidden bg-app-bg">
+      {/* Decorative diagonal bands, matching the reference. aria-hidden +
+          pointer-events-none: pure decoration, never in the way. Rotated divs
+          rather than an image so they scale to any viewport with no asset. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-[30%] -top-[45%] h-[90%] w-[85%] rotate-[24deg] bg-white/60 shadow-sm" />
+        <div className="absolute -left-[42%] -top-[30%] h-[85%] w-[80%] rotate-[24deg] bg-black/[0.03]" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-screen max-w-[1400px] flex-col lg:flex-row">
         {/* Marketing panel — desktop only. Removed from the DOM on small
             screens rather than visually hidden, so screen readers reach the
             form immediately and mobile pays no markup cost. */}
