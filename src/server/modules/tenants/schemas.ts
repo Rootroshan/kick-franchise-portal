@@ -22,6 +22,13 @@ export const createTenantSchema = z.object({
 export const updateTenantSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   status: z.enum(["active", "suspended"]).optional(),
+  // Contact details. Each accepts "" so a field can be CLEARED — email()/url()
+  // alone would reject the empty string a form sends when emptying an input,
+  // making it impossible to remove a value once set.
+  hqAddress: z.string().max(500).optional(),
+  phone: z.string().max(50).optional(),
+  email: z.string().email().or(z.literal("")).optional(),
+  website: z.string().url().or(z.literal("")).optional(),
   theme: z
     .object({
       logoUrl: z.string().url().optional(),

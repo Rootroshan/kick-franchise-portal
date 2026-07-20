@@ -104,6 +104,12 @@ model Tenant {
   clerkOrgId String?  @unique // Clerk Organization id backing this tenant (spec §9)
   status     String   @default("active")
   theme      Json     @default("{}") // { logoUrl, primary, secondary, font }
+  /// Brand contact details, shown on Brand Detail. All nullable: brands
+  /// created before these existed have none, and none is a valid state.
+  hqAddress  String?
+  phone      String?
+  email      String?
+  website    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

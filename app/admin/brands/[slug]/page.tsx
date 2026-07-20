@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Store, Users, ShoppingCart, DollarSign, Package } from "lucide-react";
+import { ArrowLeft, Store, Users, ShoppingCart, DollarSign, Package, MapPin, Phone, Mail, Globe } from "lucide-react";
+import { parseTenantTheme } from "@/lib/theme";
+import { EditBrandDialog } from "@/components/admin/EditBrandDialog";
 import { requireRole } from "@/server/modules/identity/guard";
 import { getBrandBySlug } from "@/server/modules/tenants/brands";
 import { listLocations, listCustomDomains, listMemberships } from "@/server/modules/tenants/service";
 import { HttpError } from "@/server/modules/identity/errors";
 import { formatCents } from "@/lib/utils";
-import { PageHeader, KPIStatCard, StatusBadge, GhostButtonLink } from "@/components/admin/kit";
+import { PageHeader, KPIStatCard, StatusBadge } from "@/components/admin/kit";
 import { LocationsPanel } from "@/components/admin/LocationsPanel";
 import { DomainsPanel } from "@/components/admin/DomainsPanel";
 import { MembersPanel } from "@/components/admin/MembersPanel";
@@ -41,8 +43,33 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
         title={brand.name}
         description={`${brand.slug} · created ${brand.createdAt.toLocaleDateString()}`}
         secondaryAction={<StatusBadge status={brand.status} />}
-        action={<GhostButtonLink href={`/admin/brands/${brand.slug}/edit`}>Edit Brand</GhostButtonLink>}
+        action={
+          <EditBrandDialog
+            brand={{
+              id: brand.id,
+              name: brand.name,
+              status: brand.status,
+              hqAddress: brand.hqAddress,
+              phone: brand.phone,
+              email: brand.email,
+              website: brand.website,
+              logoUrl: parseTenantTheme(brand.theme).logoUrl,
+            }}
+          />
+        }
       />
+
+      {/* Brand contact details. Shown above the rollups because this is the
+          identifying information an operator looks for first. */}
+      <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold">Brand information</h2>
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+          <InfoField icon={MapPin} label="Headquarters" value={brand.hqAddress} />
+          <InfoField icon={Phone} label="Main phone" value={brand.phone} />
+          <InfoField icon={Mail} label="Main email" value={brand.email} />
+          <InfoField icon={Globe} label="Website" value={brand.website} href={brand.website} />
+        </dl>
+      </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <KPIStatCard label="Stores" value={brand.stores.length} icon={Store} tone="info" />
@@ -92,6 +119,43 @@ function ThemeRow({ label, value, swatch }: { label: string; value?: string; swa
         {swatch && value && <span className="h-4 w-4 rounded-full border border-border" style={{ background: value }} />}
         {value || "—"}
       </span>
+    </div>
+  );
+}
+
+/** One brand contact field. Renders an em dash when unset, never a blank gap. */
+function InfoField({
+  icon: Icon,
+  label,
+  value,
+  href,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | null;
+  href?: string | null;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+        <dd className="text-sm font-medium text-foreground">
+          {value ? (
+            href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer" className="text-status-info hover:underline">
+                {value}
+              </a>
+            ) : (
+              value
+            )
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </dd>
+      </div>
     </div>
   );
 }

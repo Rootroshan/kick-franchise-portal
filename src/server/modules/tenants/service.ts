@@ -52,6 +52,12 @@ export async function updateTenant(ctx: RequestContext, tenantId: string, input:
       data: {
         name: input.name,
         status: input.status,
+        // "" means the operator cleared the field, which must persist as NULL
+        // rather than an empty string — undefined would leave the old value.
+        hqAddress: input.hqAddress === undefined ? undefined : input.hqAddress || null,
+        phone: input.phone === undefined ? undefined : input.phone || null,
+        email: input.email === undefined ? undefined : input.email || null,
+        website: input.website === undefined ? undefined : input.website || null,
         theme: input.theme ? { ...(before.theme as object), ...input.theme } : undefined,
       },
     });

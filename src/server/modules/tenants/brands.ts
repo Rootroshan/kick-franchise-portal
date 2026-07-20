@@ -138,6 +138,10 @@ export type BrandDetail = {
   status: string;
   createdAt: Date;
   theme: Record<string, unknown>;
+  hqAddress: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
   stores: Array<{ id: string; name: string; address: string | null; status: string }>;
   members: Array<{ id: string; displayName: string | null; email: string | null; role: string }>;
   orderCount: number;
@@ -164,6 +168,10 @@ export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise
     const revenueCents = orders.filter((o) => PAID.includes(o.status)).reduce((s, o) => s + netRevenue(o), 0);
 
     return {
+      hqAddress: t.hqAddress,
+      phone: t.phone,
+      email: t.email,
+      website: t.website,
       id: t.id,
       name: t.name,
       slug: t.slug,
