@@ -27,7 +27,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Recor
     <div>
       <PageHeader
         title="Brands"
-        description="Every franchise brand on the platform. Open a brand to manage its stores, members, and domains."
+        description="Manage all franchise brands, their stores, members and performance."
         action={
           <PrimaryButtonLink href="/admin/brands/new">
             <Plus className="h-4 w-4" /> New Brand
@@ -36,12 +36,12 @@ export default async function BrandsPage({ searchParams }: { searchParams: Recor
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <KPIStatCard label="Total Brands" value={kpis.totalBrands} icon={Building2} tone="info" />
-        <KPIStatCard label="Active Brands" value={kpis.activeBrands} icon={CheckCircle2} tone="success" />
-        <KPIStatCard label="Total Stores" value={kpis.totalStores} icon={Store} tone="purple" />
-        <KPIStatCard label="Total Members" value={kpis.totalMembers} icon={Users2} tone="info" />
-        <KPIStatCard label="Total Orders" value={kpis.totalOrders} icon={ShoppingCart} tone="warning" />
-        <KPIStatCard label="Platform Revenue" value={formatCents(kpis.totalRevenueCents)} icon={DollarSign} tone="teal" />
+        <KPIStatCard label="Total Brands" value={kpis.totalBrands} sub="All registered brands" icon={Building2} tone="info" />
+        <KPIStatCard label="Active Brands" value={kpis.activeBrands} sub="Currently active" icon={CheckCircle2} tone="success" />
+        <KPIStatCard label="Total Stores" value={kpis.totalStores} sub="Across all brands" icon={Store} tone="purple" />
+        <KPIStatCard label="Total Members" value={kpis.totalMembers} sub="Across all brands" icon={Users2} tone="info" />
+        <KPIStatCard label="Total Orders" value={kpis.totalOrders} sub="All time orders" icon={ShoppingCart} tone="warning" />
+        <KPIStatCard label="Platform Revenue" value={formatCents(kpis.totalRevenueCents)} sub="All time revenue" icon={DollarSign} tone="teal" />
       </div>
 
       <ListToolbar

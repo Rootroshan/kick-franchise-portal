@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, RotateCcw } from "lucide-react";
 
 export type FilterDef = { key: string; label: string; options: Array<{ value: string; label: string }> };
 
@@ -40,6 +40,19 @@ export function ListToolbar({ filters = [], searchPlaceholder = "Search…" }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  // Only offer Clear when something is actually filtered — an always-visible
+  // control that usually does nothing is noise.
+  const activeFilters = filters.some((f) => (params.get(f.key) ?? "") !== "") || (params.get("search") ?? "") !== "";
+
+  const clearAll = () => {
+    setSearch("");
+    const next = new URLSearchParams(params.toString());
+    for (const f of filters) next.delete(f.key);
+    next.delete("search");
+    next.set("page", "1");
+    router.push(`${pathname}?${next.toString()}`);
+  };
+
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <div className="relative min-w-[180px] flex-1">
@@ -67,6 +80,17 @@ export function ListToolbar({ filters = [], searchPlaceholder = "Search…" }: {
           ))}
         </select>
       ))}
+
+      {activeFilters && (
+        <button
+          type="button"
+          onClick={clearAll}
+          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          Clear Filters
+        </button>
+      )}
     </div>
   );
 }

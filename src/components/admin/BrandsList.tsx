@@ -21,12 +21,13 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
           <thead>
             <tr className="border-b-2 border-border bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-foreground/70">
               <th className="px-4 py-3">Brand</th>
-              <th className="px-4 py-3">Domain</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Domain Status</th>
               <th className="px-4 py-3 text-right">Stores</th>
               <th className="px-4 py-3 text-right">Members</th>
               <th className="px-4 py-3 text-right">Orders</th>
               <th className="px-4 py-3 text-right">Revenue</th>
+              <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -39,15 +40,22 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-foreground">{b.name}</div>
                       <div className="truncate font-mono text-xs text-muted-foreground">{b.slug}</div>
+                      {b.customDomain && (
+                        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                          <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{b.customDomain}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3"><DomainCell domain={b.customDomain} status={b.domainStatus} /></td>
                 <td className="px-4 py-3"><BrandStatus status={b.status} /></td>
+                <td className="px-4 py-3"><DomainStatusBadge status={b.domainStatus} /></td>
                 <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">{b.storeCount}</td>
                 <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">{b.memberCount}</td>
                 <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">{b.orderCount}</td>
                 <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{formatCents(b.revenueCents)}</td>
+                <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(b.createdAt)}</td>
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={`/admin/brands/${b.slug}`}
@@ -78,7 +86,15 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
               <BrandStatus status={b.status} />
             </div>
 
-            <div className="mt-3"><DomainCell domain={b.customDomain} status={b.domainStatus} /></div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <DomainStatusBadge status={b.domainStatus} />
+              {b.customDomain && (
+                <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                  <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  {b.customDomain}
+                </span>
+              )}
+            </div>
 
             <dl className="mt-3 grid grid-cols-4 gap-2 border-t border-border pt-3 text-center">
               <Metric label="Stores" value={String(b.storeCount)} />
@@ -130,36 +146,32 @@ function BrandAvatar({ name, theme }: { name: string; theme: unknown }) {
 }
 
 /**
- * Domain cell.
+ * Domain verification badge.
  *
- * VERIFIED means ownership was proven — not that the domain is serving. The
- * label says "Verified" rather than "Active" so the two are not conflated;
- * that conflation is what made a broken domain look healthy.
+ * "Verified" means ownership was proven — NOT that the domain is serving
+ * traffic. The label deliberately avoids "Active" so the two are not
+ * conflated; that conflation is what made an unreachable domain look healthy.
  */
-function DomainCell({ domain, status }: { domain: string | null; status: string | null }) {
-  if (!domain) {
-    return <span className="text-xs text-muted-foreground">No custom domain</span>;
-  }
+function DomainStatusBadge({ status }: { status: string | null }) {
+  if (!status) return <span className="text-xs text-muted-foreground">Not configured</span>;
 
   const map: Record<string, { cls: string; Icon: typeof CheckCircle2; label: string }> = {
     VERIFIED: { cls: "bg-status-success/15 text-status-success", Icon: CheckCircle2, label: "Verified" },
     PENDING: { cls: "bg-status-warning/15 text-status-warning", Icon: Clock, label: "Pending DNS" },
     FAILED: { cls: "bg-status-error/15 text-status-error", Icon: AlertTriangle, label: "Failed" },
   };
-  const tone = map[status ?? ""] ?? map.PENDING!;
+  const tone = map[status] ?? map.PENDING!;
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 font-mono text-xs text-foreground">
-        <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        {domain}
-      </span>
-      <span className={cn("inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", tone.cls)}>
-        <tone.Icon className="h-3 w-3" aria-hidden="true" />
-        {tone.label}
-      </span>
-    </div>
+    <span className={cn("inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold", tone.cls)}>
+      <tone.Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {tone.label}
+    </span>
   );
+}
+
+function formatDate(d: Date): string {
+  return new Date(d).toLocaleDateString("en-CA", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function BrandStatus({ status }: { status: string }) {
