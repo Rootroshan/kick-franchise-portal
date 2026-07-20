@@ -35,14 +35,17 @@ describe("Sign-out flow", () => {
     expect(signOutMock).toHaveBeenCalled();
   });
 
-  it("returns a tenant user to the branded login on their OWN host", async () => {
-    // Building the redirect from req.url would use the canonical deployment
-    // URL on Vercel and eject the user onto *.vercel.app mid sign-out.
+  it("returns a tenant user to the ROOT of their own host", async () => {
+    // Two things matter: the hostname is preserved (req.url would use the
+    // canonical deployment URL on Vercel and eject them onto *.vercel.app),
+    // and no internal path leaks into the address bar — the middleware
+    // rewrites the root to the branded login.
     const res = await callSignOut();
     expect(res.status).toBe(307);
     const location = res.headers.get("location") ?? "";
     expect(location).toContain("portal.example.com");
-    expect(location).toContain("/portal-login");
+    expect(location).not.toContain("/portal-login");
+    expect(new URL(location).pathname).toBe("/");
     expect(location).toContain("signed_out=1");
   });
 

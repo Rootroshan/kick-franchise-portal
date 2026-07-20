@@ -40,8 +40,11 @@ export async function GET(req: Request) {
   const bare = host.split(":")[0]?.toLowerCase() ?? "";
   const isPlatformHost = !base || bare === base || bare.endsWith(".vercel.app") || bare === "localhost";
 
+  // Tenant portals return to their own ROOT — the middleware rewrites that to
+  // the branded login, so the user never sees an internal path. Only the
+  // platform host uses an explicit /sign-in.
   const res = NextResponse.redirect(
-    new URL(`${isPlatformHost ? "/sign-in" : "/portal-login"}?signed_out=1`, `${proto}://${host}`)
+    new URL(`${isPlatformHost ? "/sign-in" : "/"}?signed_out=1`, `${proto}://${host}`)
   );
 
   // Belt-and-braces: expire the session cookies directly in case signOut()
