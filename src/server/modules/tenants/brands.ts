@@ -17,6 +17,12 @@ export type BrandRow = {
   memberCount: number;
   orderCount: number;
   revenueCents: number;
+  /** Primary custom domain, if one is registered. */
+  customDomain: string | null;
+  /** PENDING | VERIFIED | FAILED, or null when no domain exists. */
+  domainStatus: string | null;
+  /** Brand theme, for the logo/initial avatar in the list. */
+  theme: unknown;
 };
 
 export type BrandListResult = { rows: BrandRow[]; total: number };
@@ -25,7 +31,17 @@ export type BrandListResult = { rows: BrandRow[]; total: number };
 export async function listBrands(ctx: RequestContext, q: AdminListQuery): Promise<BrandListResult> {
   return withTenant(ctx, async (tx) => {
     const where = {
-      ...(q.search ? { OR: [{ name: { contains: q.search, mode: "insensitive" as const } }, { slug: { contains: q.search, mode: "insensitive" as const } }] } : {}),
+      ...(q.search
+        ? {
+            OR: [
+              { name: { contains: q.search, mode: "insensitive" as const } },
+              { slug: { contains: q.search, mode: "insensitive" as const } },
+              // Domains live on a related table, so this needs a relation
+              // filter rather than another column comparison.
+              { customDomains: { some: { hostname: { contains: q.search, mode: "insensitive" as const } } } },
+            ],
+          }
+        : {}),
       ...(q.status ? { status: q.status } : {}),
     };
 
@@ -43,11 +59,25 @@ export async function listBrands(ctx: RequestContext, q: AdminListQuery): Promis
 
     // Rollups per brand — grouped counts to avoid N+1.
     const ids = tenants.map((t) => t.id);
-    const [stores, members, orders] = await Promise.all([
+    const [stores, members, orders, domains] = await Promise.all([
       tx.location.groupBy({ by: ["tenantId"], where: { tenantId: { in: ids } }, _count: true }),
       tx.membership.groupBy({ by: ["tenantId"], where: { tenantId: { in: ids } }, _count: true }),
       tx.order.findMany({ where: { tenantId: { in: ids } }, select: { tenantId: true, status: true, subtotalCents: true, refundedCents: true } }),
+      // One query mapped in memory, matching the rollup pattern above — an
+      // include would issue a subquery per row.
+      tx.customDomain.findMany({
+        where: { tenantId: { in: ids } },
+        select: { tenantId: true, hostname: true, status: true },
+        orderBy: { createdAt: "asc" },
+      }),
     ]);
+
+    // First domain per tenant wins: a brand may register several, but the list
+    // shows the primary one.
+    const domainMap = new Map<string, { hostname: string; status: string }>();
+    for (const d of domains) {
+      if (!domainMap.has(d.tenantId)) domainMap.set(d.tenantId, { hostname: d.hostname, status: d.status });
+    }
 
     const storeMap = new Map(stores.map((s) => [s.tenantId, s._count]));
     const memberMap = new Map(members.map((m) => [m.tenantId, m._count]));
@@ -68,24 +98,36 @@ export async function listBrands(ctx: RequestContext, q: AdminListQuery): Promis
       memberCount: (memberMap.get(t.id) as number) ?? 0,
       orderCount: orderCount.get(t.id) ?? 0,
       revenueCents: revenue.get(t.id) ?? 0,
+      customDomain: domainMap.get(t.id)?.hostname ?? null,
+      domainStatus: domainMap.get(t.id)?.status ?? null,
+      theme: t.theme,
     }));
 
     return { rows, total };
   });
 }
 
-export type BrandKpis = { totalBrands: number; activeBrands: number; totalStores: number; totalRevenueCents: number };
+export type BrandKpis = {
+  totalBrands: number;
+  activeBrands: number;
+  totalStores: number;
+  totalMembers: number;
+  totalOrders: number;
+  totalRevenueCents: number;
+};
 
 export async function getBrandKpis(ctx: RequestContext): Promise<BrandKpis> {
   return withTenant(ctx, async (tx) => {
-    const [totalBrands, activeBrands, totalStores, revenue] = await Promise.all([
+    const [totalBrands, activeBrands, totalStores, totalMembers, totalOrders, revenue] = await Promise.all([
       tx.tenant.count(),
       tx.tenant.count({ where: { status: "active" } }),
       tx.location.count(),
+      tx.membership.count(),
+      tx.order.count(),
       tx.order.aggregate({ _sum: { subtotalCents: true, refundedCents: true }, where: { status: { in: PAID } } }),
     ]);
     const totalRevenueCents = (revenue._sum.subtotalCents ?? 0) - (revenue._sum.refundedCents ?? 0);
-    return { totalBrands, activeBrands, totalStores, totalRevenueCents };
+    return { totalBrands, activeBrands, totalStores, totalMembers, totalOrders, totalRevenueCents };
   });
 }
 

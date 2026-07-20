@@ -1,12 +1,11 @@
-import { Plus, Building2, CheckCircle2, Store, DollarSign } from "lucide-react";
+import { Plus, Building2, CheckCircle2, Store, Users2, ShoppingCart, DollarSign } from "lucide-react";
 import { requireRole } from "@/server/modules/identity/guard";
 import { listBrands, getBrandKpis } from "@/server/modules/tenants/brands";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { formatCents } from "@/lib/utils";
-import { PageHeader, KPIStatCard, StatusBadge, Pagination, PrimaryButtonLink } from "@/components/admin/kit";
+import { PageHeader, KPIStatCard, EmptyState, Pagination, PrimaryButtonLink } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
-import type { BrandRow } from "@/server/modules/tenants/brands";
+import { BrandsList } from "@/components/admin/BrandsList";
 
 export const dynamic = "force-dynamic";
 
@@ -16,30 +15,19 @@ export default async function BrandsPage({ searchParams }: { searchParams: Recor
   const [{ rows, total }, kpis] = await Promise.all([listBrands(ctx, q), getBrandKpis(ctx)]);
   const pages = pageCount(total, q.limit);
 
-  const columns: Column<BrandRow>[] = [
-    {
-      key: "name",
-      header: "Brand",
-      sortKey: "name",
-      cell: (b) => (
-        <div>
-          <div className="font-medium text-foreground">{b.name}</div>
-          <div className="text-xs text-muted-foreground">{b.slug}</div>
-        </div>
-      ),
-    },
-    { key: "status", header: "Status", sortKey: "status", cell: (b) => <StatusBadge status={b.status} /> },
-    { key: "stores", header: "Stores", hideOnMobile: true, cell: (b) => <span className="tabular-nums">{b.storeCount}</span> },
-    { key: "members", header: "Members", hideOnMobile: true, cell: (b) => <span className="tabular-nums">{b.memberCount}</span> },
-    { key: "orders", header: "Orders", hideOnMobile: true, cell: (b) => <span className="tabular-nums">{b.orderCount}</span> },
-    { key: "revenue", header: "Revenue", cell: (b) => <span className="font-medium tabular-nums">{formatCents(b.revenueCents)}</span> },
-  ];
+  // Domain status lives on a related table, so it is filtered after the query
+  // rather than pushed into it — a page holds at most 100 rows, and this keeps
+  // the shared list query untouched.
+  const domainFilter = typeof searchParams.domain === "string" ? searchParams.domain : "";
+  const visible = domainFilter
+    ? rows.filter((b) => (domainFilter === "none" ? b.customDomain === null : b.domainStatus === domainFilter))
+    : rows;
 
   return (
     <div>
       <PageHeader
         title="Brands"
-        description="Every franchise brand on the platform. Click a brand to manage its stores, members, and domains."
+        description="Every franchise brand on the platform. Open a brand to manage its stores, members, and domains."
         action={
           <PrimaryButtonLink href="/admin/brands/new">
             <Plus className="h-4 w-4" /> New Brand
@@ -47,15 +35,17 @@ export default async function BrandsPage({ searchParams }: { searchParams: Recor
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <KPIStatCard label="Total Brands" value={kpis.totalBrands} icon={Building2} tone="info" />
-        <KPIStatCard label="Active" value={kpis.activeBrands} icon={CheckCircle2} tone="success" />
+        <KPIStatCard label="Active Brands" value={kpis.activeBrands} icon={CheckCircle2} tone="success" />
         <KPIStatCard label="Total Stores" value={kpis.totalStores} icon={Store} tone="purple" />
+        <KPIStatCard label="Total Members" value={kpis.totalMembers} icon={Users2} tone="info" />
+        <KPIStatCard label="Total Orders" value={kpis.totalOrders} icon={ShoppingCart} tone="warning" />
         <KPIStatCard label="Platform Revenue" value={formatCents(kpis.totalRevenueCents)} icon={DollarSign} tone="teal" />
       </div>
 
       <ListToolbar
-        searchPlaceholder="Search brands by name or slug…"
+        searchPlaceholder="Search by brand name, slug or custom domain…"
         filters={[
           {
             key: "status",
@@ -66,23 +56,35 @@ export default async function BrandsPage({ searchParams }: { searchParams: Recor
               { value: "inactive", label: "Inactive" },
             ],
           },
+          {
+            key: "domain",
+            label: "Domain",
+            options: [
+              { value: "VERIFIED", label: "Verified" },
+              { value: "PENDING", label: "Pending DNS" },
+              { value: "FAILED", label: "Failed" },
+              { value: "none", label: "No custom domain" },
+            ],
+          },
         ]}
       />
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(b) => b.id}
-        rowHref={(b) => `/admin/brands/${b.slug}`}
-        basePath="/admin/brands"
-        currentParams={q.raw}
-        sort={q.sort}
-        direction={q.direction}
-        empty={{ title: "No brands found", description: q.search ? "Try a different search." : "Create your first brand to get started." }}
-      />
+      {visible.length === 0 ? (
+        <EmptyState
+          title="No brands found"
+          description={
+            q.search || q.status || domainFilter ? "Try different filters." : "Create your first brand to get started."
+          }
+          icon={Building2}
+        />
+      ) : (
+        <BrandsList rows={visible} />
+      )}
 
       <div className="flex items-center justify-between">
-        <p className="mt-3 text-xs text-muted-foreground">{total} brand{total === 1 ? "" : "s"} total</p>
+        <p className="mt-3 text-xs font-medium text-foreground/70">
+          Showing {visible.length} of {total} brand{total === 1 ? "" : "s"}
+        </p>
         <Pagination page={q.page} pageCount={pages} makeHref={(p) => buildHref("/admin/brands", q.raw, { page: p })} />
       </div>
     </div>
