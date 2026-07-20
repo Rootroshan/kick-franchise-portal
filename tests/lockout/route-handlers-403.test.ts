@@ -3,8 +3,8 @@ import { vi } from "vitest";
 
 const authState = { userId: null as string | null, host: "" };
 
-vi.mock("@clerk/nextjs/server", () => ({
-  auth: async () => ({ userId: authState.userId }),
+vi.mock("@/server/auth/config", () => ({
+  auth: async () => (authState.userId ? { user: { id: authState.userId } } : null),
 }));
 vi.mock("next/headers", () => ({
   headers: async () => new Map([["host", authState.host]]) as unknown as Headers,

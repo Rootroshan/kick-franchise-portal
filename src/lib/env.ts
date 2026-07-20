@@ -3,9 +3,10 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional().default(""),
-  CLERK_SECRET_KEY: z.string().optional().default(""),
-  CLERK_WEBHOOK_SECRET: z.string().optional().default(""),
+  // Auth.js (NextAuth) — replaced Clerk.
+  AUTH_SECRET: z.string().optional().default(""),
+  GOOGLE_CLIENT_ID: z.string().optional().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional().default(""),

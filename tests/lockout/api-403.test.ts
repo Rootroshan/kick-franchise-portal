@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const authState = { userId: null as string | null, host: "test-tenant.portal.kickmedia.test" };
 
-vi.mock("@clerk/nextjs/server", () => ({
-  auth: async () => ({ userId: authState.userId }),
+vi.mock("@/server/auth/config", () => ({
+  auth: async () => (authState.userId ? { user: { id: authState.userId } } : null),
 }));
 vi.mock("next/headers", () => ({
   headers: async () => new Map([["host", authState.host]]) as unknown as Headers,

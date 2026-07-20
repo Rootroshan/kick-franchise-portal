@@ -1,22 +1,24 @@
 import { test as base, expect } from "@playwright/test";
-import { clerkSetup, clerk } from "@clerk/testing/playwright";
 
 /**
- * Shared Playwright fixtures for signing in as each of the three roles via
- * Clerk's official testing helpers (@clerk/testing). Requires a real Clerk
- * test-mode instance configured via CLERK_SECRET_KEY/
- * NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY in the environment — see tests/e2e/README.md
- * for the fixture users these specs expect to already exist.
+ * Shared Playwright fixtures for signing in as each of the three roles.
+ *
+ * Since Clerk was removed, sign-in is our own form at /sign-in backed by
+ * NextAuth's credentials provider — so the fixture simply drives the real UI
+ * rather than calling a vendor testing helper. No external test instance is
+ * required; the fixture users must exist in the database with a password set
+ * (see tests/e2e/README.md).
  */
 export const test = base.extend<{ signInAs: (email: string, password: string) => Promise<void> }>({
   signInAs: async ({ page }, use) => {
-    await clerkSetup();
     await use(async (email: string, password: string) => {
       await page.goto("/sign-in");
-      await clerk.signIn({
-        page,
-        signInParams: { strategy: "password", identifier: email, password },
-      });
+      await page.fill("#email", email);
+      await page.fill("#password", password);
+      await page.click('button[type="submit"]');
+      // The form does a full navigation on success so the session cookie is
+      // present on the server request that renders the dashboard.
+      await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
     });
   },
 });

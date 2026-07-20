@@ -1,23 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
- * Logout must do three things that are easy to get subtly wrong:
+ * Logout must:
+ *   1. Clear the NextAuth session cookie — with the JWT strategy the cookie IS
+ *      the session, so removing it ends the session for this browser.
+ *   2. Redirect to sign-in with the signed-out flag.
+ *   3. Send no-store so the back button cannot re-render a cached signed-in page.
  *
- *  1. REVOKE the session at Clerk — clearing a cookie alone leaves a captured
- *     token valid until it expires naturally.
- *  2. CLEAR the cookies so this browser stops presenting the token.
- *  3. Send no-store so the back button cannot re-render a cached signed-in page.
- *
- * These tests pin all three, plus the "revocation failure must not block
- * sign-out" behaviour.
+ * A signOut() failure must never block any of that.
  */
 
-const revokeSession = vi.fn();
-const authMock = vi.fn();
+const signOutMock = vi.fn();
 
-vi.mock("@clerk/nextjs/server", () => ({
-  auth: () => authMock(),
-  clerkClient: async () => ({ sessions: { revokeSession } }),
+vi.mock("@/server/auth/config", () => ({
+  signOut: (...args: unknown[]) => signOutMock(...args),
 }));
 
 vi.mock("@/lib/devBypass", () => ({ isDevBypassEnabled: () => false }));
@@ -31,13 +27,12 @@ describe("Sign-out flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    authMock.mockResolvedValue({ sessionId: "sess_123" });
-    revokeSession.mockResolvedValue(undefined);
+    signOutMock.mockResolvedValue(undefined);
   });
 
-  it("revokes the session at Clerk, not just locally", async () => {
+  it("calls NextAuth signOut", async () => {
     await callSignOut();
-    expect(revokeSession).toHaveBeenCalledWith("sess_123");
+    expect(signOutMock).toHaveBeenCalled();
   });
 
   it("redirects to the sign-in page with the signed-out flag", async () => {
@@ -48,12 +43,11 @@ describe("Sign-out flow", () => {
     expect(location).toContain("signed_out=1");
   });
 
-  it("expires both Clerk cookies", async () => {
+  it("expires the session cookie", async () => {
     const res = await callSignOut();
     const setCookie = res.headers.getSetCookie().join(" | ");
-    expect(setCookie).toContain("__session=");
-    expect(setCookie).toContain("__client_uat=");
-    // Max-Age=0 is what actually removes them.
+    expect(setCookie).toContain("authjs.session-token=");
+    // Max-Age=0 is what actually removes it.
     expect(setCookie).toContain("Max-Age=0");
   });
 
@@ -64,21 +58,13 @@ describe("Sign-out flow", () => {
     expect(cc).toContain("must-revalidate");
   });
 
-  it("still signs the user out when Clerk revocation fails", async () => {
-    revokeSession.mockRejectedValue(new Error("Clerk unreachable"));
+  it("still clears cookies when signOut() throws", async () => {
+    signOutMock.mockRejectedValue(new Error("boom"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     const res = await callSignOut();
 
-    // The cookies must still be cleared — an outage must not trap the user
-    // in a signed-in state.
     expect(res.status).toBe(307);
     expect(res.headers.getSetCookie().join(" | ")).toContain("Max-Age=0");
-  });
-
-  it("does not call Clerk when there is no active session", async () => {
-    authMock.mockResolvedValue({ sessionId: null });
-    await callSignOut();
-    expect(revokeSession).not.toHaveBeenCalled();
   });
 });

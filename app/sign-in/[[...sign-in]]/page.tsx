@@ -1,8 +1,8 @@
 import { CheckCircle2 } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
 
-// Catch-all so Clerk's own redirect targets (/sign-in/factor-one etc.) resolve
-// here rather than 404ing. Public — see middleware isPublicRoute.
+// Catch-all so any /sign-in/* path resolves here rather than 404ing.
+// Public — see middleware PUBLIC_PATTERNS.
 export default function SignInPage({
   searchParams,
 }: {

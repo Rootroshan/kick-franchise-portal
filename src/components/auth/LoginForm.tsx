@@ -1,22 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useSignIn } from "@clerk/nextjs";
+import { signIn } from "next-auth/react";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
 /**
- * Custom sign-in form (replaces Clerk's prebuilt <SignIn /> widget).
+ * Sign-in form (NextAuth credentials + Google).
  *
- * Uses useSignIn() rather than <SignIn /> so the markup is entirely ours —
- * Clerk handles credential verification and session creation, we own the
- * layout, validation, and error copy. Provider errors are mapped to fixed
- * messages: Clerk's raw strings leak implementation detail and, on the
- * identifier step, can distinguish "no such account" from "wrong password",
- * which is an account-enumeration vector.
+ * Credential failures collapse to a single message: distinguishing "no such
+ * account" from "wrong password" would let anyone test which addresses are
+ * registered. The server side mirrors this by returning null for every failure
+ * mode (see server/auth/config.ts).
  */
-export function LoginForm() {
-  const { signIn, setActive, isLoaded } = useSignIn();
-
+export function LoginForm({ callbackUrl = "/admin" }: { callbackUrl?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -31,26 +27,26 @@ export function LoginForm() {
     if (!email.trim()) return setError("Enter your email address.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter a valid email address.");
     if (!password) return setError("Enter your password.");
-    if (!isLoaded || !signIn) return setError("Still loading — try again in a moment.");
 
     setPending(true);
     try {
-      const result = await signIn.create({ identifier: email.trim(), password });
+      const res = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
 
-      if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
-        // Full navigation, not router.push: the session cookie must be present
-        // on the server request that renders the dashboard, and a client-side
-        // transition can race the cookie being set.
-        window.location.href = "/admin";
+      if (res?.error) {
+        setError("Incorrect email or password.");
         return;
       }
 
-      // Multi-factor or another step is required — Clerk's own flow handles
-      // those, so send the user there rather than half-implementing MFA.
-      setError("Additional verification is required. Please use the standard sign-in page.");
-    } catch (err) {
-      setError(describeSignInError(err));
+      // Full navigation, not router.push: the session cookie must be present on
+      // the server request that renders the dashboard, and a client-side
+      // transition can race the cookie being set.
+      window.location.href = callbackUrl;
+    } catch {
+      setError("Could not sign in. Please try again.");
     } finally {
       setPending(false);
     }
@@ -58,15 +54,9 @@ export function LoginForm() {
 
   const signInWithGoogle = async () => {
     setError(null);
-    if (!isLoaded || !signIn) return setError("Still loading — try again in a moment.");
-
     setGooglePending(true);
     try {
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/admin",
-      });
+      await signIn("google", { callbackUrl });
     } catch {
       setGooglePending(false);
       setError("Could not start Google sign-in. Please try again.");
@@ -162,32 +152,6 @@ export function LoginForm() {
       </p>
     </div>
   );
-}
-
-/**
- * Maps Clerk error codes to fixed copy.
- *
- * Credential failures deliberately collapse to one message: distinguishing
- * "no account with that email" from "wrong password" tells an attacker which
- * addresses are registered.
- */
-function describeSignInError(err: unknown): string {
-  const code = (err as { errors?: Array<{ code?: string }> } | null)?.errors?.[0]?.code;
-
-  switch (code) {
-    case "form_identifier_not_found":
-    case "form_password_incorrect":
-    case "strategy_for_user_invalid":
-      return "Incorrect email or password.";
-    case "too_many_requests":
-      return "Too many attempts. Please wait a moment and try again.";
-    case "session_exists":
-      return "You are already signed in.";
-    case "form_param_format_invalid":
-      return "Enter a valid email address.";
-    default:
-      return "Could not sign in. Please check your details and try again.";
-  }
 }
 
 /** Google's mark, inline so the page has no external asset dependency. */

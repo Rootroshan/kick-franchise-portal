@@ -1,58 +1,45 @@
 import { NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { signOut } from "@/server/auth/config";
 import { isDevBypassEnabled } from "@/lib/devBypass";
 
-/**
- * Sign-out endpoint. A plain navigation target so the client button needs no
- * Clerk hook — useClerk() throws during render when <ClerkProvider> isn't
- * mounted, which is the case in dev-bypass mode, and that crashed the client
- * subtree the logout button lived in.
- *
- * Three things have to happen, in this order:
- *
- *  1. REVOKE the session on Clerk's servers. Deleting the cookie alone is not
- *     logout — a token captured beforehand stays valid until it expires
- *     naturally. Only revocation invalidates it everywhere.
- *  2. CLEAR the cookies so this browser stops presenting the token.
- *  3. Send no-store headers so the browser cannot serve a cached authenticated
- *     page from the back button after the redirect.
- */
-// Reads the session via auth() (which reads headers), so it can never be
-// prerendered — declaring it here stops Next from attempting to at build time.
+// Reads/writes the session cookie, so it can never be prerendered.
 export const dynamic = "force-dynamic";
 
+/**
+ * Sign-out. A plain navigation target so the client button needs no hook and
+ * no provider context.
+ *
+ * NextAuth's signOut() clears the session cookie. With the JWT strategy the
+ * cookie IS the session — there is no server-side record to revoke — so once
+ * it is gone the token cannot be presented again by this browser, and the
+ * middleware rejects any request without it.
+ *
+ * The redirect additionally carries no-store so the back button cannot
+ * re-render a cached authenticated page after logout.
+ */
 export async function GET(req: Request) {
   if (!isDevBypassEnabled()) {
     try {
-      const { sessionId } = await auth();
-      if (sessionId) {
-        const client = await clerkClient();
-        await client.sessions.revokeSession(sessionId);
-      }
+      // redirect: false — we build our own response below so we can attach the
+      // cache headers and the signed_out flag.
+      await signOut({ redirect: false });
     } catch (err) {
-      // Revocation can fail if the session already expired or Clerk is
-      // unreachable. Never block sign-out on it: clearing the cookies below
-      // still ends the session for this browser, which is what the user asked
-      // for. Logged so a persistent failure is visible.
-      console.error("Sign-out: session revocation failed", err);
+      // Never block sign-out on this: the cookie clearing below is what
+      // actually ends the session for this browser. Logged so a persistent
+      // failure is visible.
+      console.error("Sign-out: signOut() failed", err);
     }
   }
 
-  const url = new URL("/sign-in?signed_out=1", req.url);
-  const res = NextResponse.redirect(url);
+  const res = NextResponse.redirect(new URL("/sign-in?signed_out=1", req.url));
 
-  if (!isDevBypassEnabled()) {
-    // Clerk stores the session in __session (plus __client_uat for the
-    // client-side "is signed in" hint). Expiring both ends the session for
-    // subsequent requests. Cleared on "/" so the path scope matches how they
-    // were set.
-    for (const name of ["__session", "__client_uat"]) {
-      res.cookies.set(name, "", { maxAge: 0, path: "/", httpOnly: name === "__session", sameSite: "lax" });
-    }
+  // Belt-and-braces: expire the session cookies directly in case signOut()
+  // failed above. Both the plain and __Secure- prefixed names are used
+  // depending on whether the deployment is served over HTTPS.
+  for (const name of ["authjs.session-token", "__Secure-authjs.session-token"]) {
+    res.cookies.set(name, "", { maxAge: 0, path: "/" });
   }
 
-  // Without no-store, bfcache can render the previous authenticated page when
-  // the user hits Back — the session is gone, but the stale HTML still shows.
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
   res.headers.set("Pragma", "no-cache");
 

@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { headers } from "next/headers";
 import "@/styles/globals.css";
 import { resolveTenantFromHost } from "@/server/modules/identity/tenantResolution";
 import { parseTenantTheme, themeToCssVariables } from "@/lib/theme";
-import { isDevBypassEnabled } from "@/lib/devBypass";
 import { PosthogProvider } from "@/components/analytics/PosthogProvider";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { Toaster } from "sonner";
@@ -33,7 +31,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const tenant = await resolveTenantFromHost(host).catch(() => null);
   const theme = parseTenantTheme(tenant?.theme ?? {});
 
-  const body = (
+  // NextAuth needs no client provider here: server components read the session
+  // via auth(), and the few client components that need it call useSession()
+  // against /api/auth, which requires no wrapper.
+  return (
     <html lang="en">
       <head>
         <style>{`:root { ${themeToCssVariables(theme)} }`}</style>
@@ -45,6 +46,4 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </body>
     </html>
   );
-
-  return isDevBypassEnabled() ? body : <ClerkProvider>{body}</ClerkProvider>;
 }

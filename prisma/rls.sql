@@ -588,3 +588,28 @@ DROP POLICY IF EXISTS platform_setting_kick_only ON "PlatformSetting";
 CREATE POLICY platform_setting_kick_only ON "PlatformSetting" FOR ALL
   USING (current_setting('app.user_role', true) = 'KICK_ADMIN')
   WITH CHECK (current_setting('app.user_role', true) = 'KICK_ADMIN');
+
+-- ---------- Auth tables (NextAuth) ----------
+-- Deny-all for the application role. These hold password hashes and live
+-- session tokens; NextAuth reads them via a dedicated client that does not go
+-- through withTenant(), so no application request path needs access. A leaked
+-- query in tenant-scoped code therefore cannot read a hash or steal a session.
+ALTER TABLE "User" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "User" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS user_deny_all ON "User";
+CREATE POLICY user_deny_all ON "User" FOR ALL USING (false) WITH CHECK (false);
+
+ALTER TABLE "Account" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Account" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS account_deny_all ON "Account";
+CREATE POLICY account_deny_all ON "Account" FOR ALL USING (false) WITH CHECK (false);
+
+ALTER TABLE "Session" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Session" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS session_deny_all ON "Session";
+CREATE POLICY session_deny_all ON "Session" FOR ALL USING (false) WITH CHECK (false);
+
+ALTER TABLE "VerificationToken" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "VerificationToken" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS verification_token_deny_all ON "VerificationToken";
+CREATE POLICY verification_token_deny_all ON "VerificationToken" FOR ALL USING (false) WITH CHECK (false);

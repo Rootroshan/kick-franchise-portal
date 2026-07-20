@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/server/auth/config";
 import { headers } from "next/headers";
 import { withTenant, systemKickContext, type RequestContext } from "@/server/db/withTenant";
 import { devBypassContext } from "@/lib/devBypass";
@@ -11,7 +11,10 @@ export async function getRequestContext(): Promise<RequestContext> {
   const devCtx = devBypassContext();
   if (devCtx) return devCtx;
 
-  const { userId } = await auth();
+  // NextAuth returns the whole session; the user id is carried on it by the
+  // session callback (see server/auth/config.ts).
+  const session = await auth();
+  const userId = session?.user?.id;
   if (!userId) {
     throw new HttpError(401, "Not authenticated");
   }
