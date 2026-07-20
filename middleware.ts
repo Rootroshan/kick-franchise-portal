@@ -22,9 +22,19 @@ const isPublicRoute = createRouteMatcher([
 // DEV_BYPASS_AUTH outside a local .env.local file.
 const devBypassEnabled = process.env.NODE_ENV === "development" && process.env.DEV_BYPASS_AUTH === "true";
 
-function withHostHeader(req: NextRequest): NextResponse {
+function withHostHeader(req: NextRequest, opts: { authenticated?: boolean } = {}): NextResponse {
   const res = NextResponse.next();
   res.headers.set("x-kick-host", req.headers.get("host") ?? "");
+
+  // Authenticated pages must never be cached by the browser. Without this the
+  // back button can re-render a signed-in page from bfcache after logout — the
+  // session is already revoked, but the stale HTML still displays. Set here
+  // rather than per-page so every current and future protected route is covered.
+  if (opts.authenticated) {
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.headers.set("Pragma", "no-cache");
+  }
+
   return res;
 }
 
@@ -41,17 +51,22 @@ export default devBypassEnabled
       return withHostHeader(req);
     }
   : clerkMiddleware(async (authFn, req: NextRequest) => {
-      if (!isPublicRoute(req)) {
+      const isProtected = !isPublicRoute(req);
+      if (isProtected) {
         const { userId, redirectToSignIn } = await authFn();
         // A signed-out user hitting a protected route must be REDIRECTED to
         // sign-in. Bare auth.protect() renders a 404 for page routes in
         // @clerk/nextjs v5 unless given an unauthenticatedUrl, so we redirect
         // explicitly to our own /sign-in and preserve the intended return URL.
+        //
+        // This also covers a REVOKED session: Clerk re-validates the token on
+        // every request, so once /sign-out revokes it, authFn() yields no
+        // userId and every protected page and API route falls into this branch.
         if (!userId) {
           return redirectToSignIn({ returnBackUrl: req.url });
         }
       }
-      return withHostHeader(req);
+      return withHostHeader(req, { authenticated: isProtected });
     });
 
 export const config = {

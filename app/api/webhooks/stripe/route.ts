@@ -25,6 +25,15 @@ export async function POST(req: Request) {
     // Signing secret resolves from the DB first (admin settings), then env —
     // matching how the client key is resolved, so both rotate together.
     const signingSecret = await getSetting("STRIPE_WEBHOOK_SECRET");
+    // getSetting() returns "" when unset (mirroring env.ts's defaults), so this
+    // must be checked explicitly: an empty secret would make signature
+    // verification meaningless, and this endpoint is the ONLY authority that
+    // marks orders paid. Fail closed — 503 tells Stripe to retry once the
+    // secret is configured, rather than silently accepting forged events.
+    if (!signingSecret) {
+      console.error("Stripe webhook secret is not configured — rejecting webhook");
+      return Response.json({ error: "Webhook not configured" }, { status: 503 });
+    }
     event = (await stripeClient()).webhooks.constructEvent(rawBody, signature, signingSecret);
   } catch (err) {
     console.error("Stripe webhook signature verification failed:", err);
