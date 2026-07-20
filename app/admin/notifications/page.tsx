@@ -2,18 +2,37 @@ import Link from "next/link";
 import { Bell, CheckCircle2, Clock, AlertTriangle, ClipboardList, Megaphone } from "lucide-react";
 import { requireRole } from "@/server/modules/identity/guard";
 import { getNotificationsOverview } from "@/server/modules/notifications/admin";
+import { listNotifications } from "@/server/modules/notifications/inbox";
 import { PageHeader, KPIStatCard, EmptyState } from "@/components/admin/kit";
+import { NotificationInbox } from "@/components/admin/NotificationInbox";
 
 export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
   const ctx = await requireRole("KICK_ADMIN")();
-  const data = await getNotificationsOverview(ctx);
+  const [data, inbox] = await Promise.all([getNotificationsOverview(ctx), listNotifications(ctx)]);
 
   return (
     <div>
-      <PageHeader title="Notifications" description="Push-delivery health and operational signals that need attention across the platform." />
+      <PageHeader title="Notifications" description="Your messages, plus push-delivery health across the platform." />
 
+      {/* Messages first — this is what the sidebar badge counts. */}
+      <section className="mb-8">
+        <h2 className="mb-2 text-sm font-semibold">Messages</h2>
+        <NotificationInbox
+          items={inbox.map((n) => ({
+            id: n.id,
+            category: n.category,
+            title: n.title,
+            body: n.body,
+            href: n.href,
+            readAt: n.readAt ? n.readAt.toISOString() : null,
+            createdAt: n.createdAt.toISOString(),
+          }))}
+        />
+      </section>
+
+      <h2 className="mb-2 text-sm font-semibold">Push Delivery Health</h2>
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KPIStatCard label="Subscriptions" value={data.subs.total} icon={Bell} tone="info" />
         <KPIStatCard label="Delivering" value={data.subs.sent} icon={CheckCircle2} tone="success" />

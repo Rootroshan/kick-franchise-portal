@@ -85,6 +85,16 @@ enum PushDeliveryStatus {
   DEAD
 }
 
+/// Categories a Notification can belong to. Deliberately excludes commerce
+/// categories for franchisor/franchisee audiences — see RLS notification_*.
+enum NotificationCategory {
+  ANNOUNCEMENT
+  TASK
+  ONBOARDING
+  ARTWORK
+  SYSTEM
+}
+
 // ---------- Tenancy ----------
 
 model Tenant {
@@ -109,6 +119,7 @@ model Tenant {
   auditLogs           AuditLog[]
   customDomains       CustomDomain[]
   pushSubscriptions   PushSubscription[]
+  notifications       Notification[]
   allowances          Allowance[]
   orders              Order[]
   rebateAccruals      RebateAccrual[]
@@ -146,6 +157,7 @@ model Location {
   onboardingProgress  OnboardingProgress[]
   taskAssignments     TaskAssignment[]
   announcementAcks    AnnouncementAck[]
+  notifications       Notification[]
 
   @@index([tenantId])
 }
@@ -522,6 +534,42 @@ model PushSubscription {
 
   @@index([clerkUserId])
   @@index([tenantId])
+}
+
+/// Per-user notification inbox. Rows are written when a real event happens
+/// (announcement published, task assigned/overdue, etc). `readAt` is what makes
+/// the unread badge clear when the user opens/reads the message — the previous
+/// badge was a live count of operational conditions with no read-state, so it
+/// could never be cleared by opening the page.
+model Notification {
+  id          String               @id @default(uuid())
+  /// Recipient. Notifications are always addressed to a specific user.
+  clerkUserId String
+  /// Tenant the notification belongs to (null = platform-wide, Kick admin).
+  tenantId    String?
+  /// Location scope for franchisee-facing notifications; null = not store-specific.
+  locationId  String?
+  category    NotificationCategory
+  title       String
+  body        String?
+  /// Where clicking the notification should take the user, e.g. /admin/tasks.
+  href        String?
+  /// Entity this refers to, for de-duplication and deep links.
+  entity      String?
+  entityId    String?
+  /// Null until the recipient reads it. Drives the unread badge.
+  readAt      DateTime?
+  createdAt   DateTime             @default(now())
+
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  /// Unread-count and inbox queries both hit (clerkUserId, readAt, createdAt).
+  @@index([clerkUserId, readAt, createdAt])
+  @@index([tenantId])
+  @@index([locationId])
+  /// Prevents duplicate notifications for the same event+recipient.
+  @@unique([clerkUserId, entity, entityId, category])
 }
 
 model AuditLog {

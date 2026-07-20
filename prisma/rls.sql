@@ -527,6 +527,43 @@ DROP POLICY IF EXISTS audit_log_insert ON "AuditLog";
 CREATE POLICY audit_log_insert ON "AuditLog" FOR INSERT
   WITH CHECK (true);
 
+-- ============================================================================
+-- Notification inbox — strictly per-recipient.
+-- ============================================================================
+-- A notification is addressed to exactly one user, so the only read rule that
+-- matters is "it's mine". Tenant is NOT sufficient on its own: two franchisee
+-- users in the same store must not read each other's inbox.
+-- KICK_ADMIN can read all (support/debugging), consistent with other tables.
+ALTER TABLE "Notification" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Notification" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS notification_own_read ON "Notification";
+CREATE POLICY notification_own_read ON "Notification" FOR SELECT
+  USING (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR "clerkUserId" = current_setting('app.user_id', true)
+  );
+
+-- Recipients may only mark THEIR OWN rows read (the only field the UI updates).
+-- WITH CHECK keeps the row addressed to them after the update.
+DROP POLICY IF EXISTS notification_own_update ON "Notification";
+CREATE POLICY notification_own_update ON "Notification" FOR UPDATE
+  USING (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR "clerkUserId" = current_setting('app.user_id', true)
+  )
+  WITH CHECK (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR "clerkUserId" = current_setting('app.user_id', true)
+  );
+
+-- Writes come from trusted server code (event handlers / worker), which runs
+-- under a resolved context; INSERT...RETURNING also needs the SELECT policy
+-- above to match, which it does for the addressed recipient.
+DROP POLICY IF EXISTS notification_insert ON "Notification";
+CREATE POLICY notification_insert ON "Notification" FOR INSERT
+  WITH CHECK (true);
+
 ALTER TABLE "ProcessedStripeEvent" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ProcessedStripeEvent" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS processed_stripe_event_system ON "ProcessedStripeEvent";

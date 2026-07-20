@@ -1,14 +1,15 @@
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
+import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
 import { HttpError } from "@/server/modules/identity/errors";
 import type { z } from "zod";
 import type { createAnnouncementSchema, updateAnnouncementSchema } from "./schemas";
 
 /** KICK_ADMIN and FRANCHISOR_ADMIN may create/manage announcements for their tenant. */
 export async function createAnnouncement(ctx: RequestContext, tenantId: string, input: z.infer<typeof createAnnouncementSchema>) {
-  return withTenant(ctx, async (tx) => {
+  const announcement = await withTenant(ctx, async (tx) => {
     const status = input.publishAt && input.publishAt > new Date() ? "SCHEDULED" : "PUBLISHED";
-    const announcement = await tx.announcement.create({
+    const created = await tx.announcement.create({
       data: {
         tenantId,
         title: input.title,
@@ -28,12 +29,33 @@ export async function createAnnouncement(ctx: RequestContext, tenantId: string, 
       role: ctx.role,
       action: "announcement.create",
       entity: "Announcement",
-      entityId: announcement.id,
-      after: announcement,
+      entityId: created.id,
+      after: created,
     });
 
-    return announcement;
+    return created;
   });
+
+  // Notify store users once the announcement is actually visible to them.
+  // Runs AFTER the transaction commits so a notification never references a
+  // row that got rolled back, and a notification failure can't void the
+  // announcement itself.
+  if (announcement.status === "PUBLISHED") {
+    await notifyTenantMembers(ctx, {
+      tenantId,
+      role: "FRANCHISEE_USER",
+      category: "ANNOUNCEMENT",
+      title: announcement.requiresAck ? `Action required: ${announcement.title}` : announcement.title,
+      body: announcement.body.slice(0, 200),
+      href: `/announcements/${announcement.id}`,
+      entity: "Announcement",
+      entityId: announcement.id,
+    }).catch(() => {
+      // Never fail the publish because the inbox fan-out failed.
+    });
+  }
+
+  return announcement;
 }
 
 export async function updateAnnouncement(ctx: RequestContext, id: string, input: z.infer<typeof updateAnnouncementSchema>) {

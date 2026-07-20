@@ -1,18 +1,19 @@
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
+import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
 import { HttpError } from "@/server/modules/identity/errors";
 import type { z } from "zod";
 import type { createTaskSchema } from "./schemas";
 
 /** [K,F]: create a task and assign it to one or more locations in one call. */
 export async function createTask(ctx: RequestContext, tenantId: string, input: z.infer<typeof createTaskSchema>) {
-  return withTenant(ctx, async (tx) => {
-    const locations = await tx.location.findMany({ where: { id: { in: input.locationIds }, tenantId } });
-    if (locations.length !== input.locationIds.length) {
+  const { task, locations } = await withTenant(ctx, async (tx) => {
+    const locs = await tx.location.findMany({ where: { id: { in: input.locationIds }, tenantId } });
+    if (locs.length !== input.locationIds.length) {
       throw new HttpError(422, "One or more locations do not belong to this tenant");
     }
 
-    const task = await tx.task.create({
+    const created = await tx.task.create({
       data: {
         tenantId,
         title: input.title,
@@ -20,7 +21,7 @@ export async function createTask(ctx: RequestContext, tenantId: string, input: z
         dueAt: input.dueAt ?? null,
         createdBy: ctx.userId,
         assignments: {
-          create: locations.map((l) => ({ locationId: l.id })),
+          create: locs.map((l) => ({ locationId: l.id })),
         },
       },
       include: { assignments: true },
@@ -32,12 +33,33 @@ export async function createTask(ctx: RequestContext, tenantId: string, input: z
       role: ctx.role,
       action: "task.create",
       entity: "Task",
-      entityId: task.id,
-      after: { title: task.title, locationCount: locations.length },
+      entityId: created.id,
+      after: { title: created.title, locationCount: locs.length },
     });
 
-    return task;
+    return { task: created, locations: locs };
   });
+
+  // Notify each assigned store's users after commit. One notification per
+  // location so a user only hears about their own store's work.
+  const due = task.dueAt ? ` — due ${task.dueAt.toLocaleDateString()}` : "";
+  for (const loc of locations) {
+    await notifyTenantMembers(ctx, {
+      tenantId,
+      locationId: loc.id,
+      role: "FRANCHISEE_USER",
+      category: "TASK",
+      title: `New task: ${task.title}`,
+      body: `Assigned to ${loc.name}${due}`,
+      href: "/tasks",
+      entity: "Task",
+      entityId: task.id,
+    }).catch(() => {
+      // Inbox fan-out must never fail task creation.
+    });
+  }
+
+  return task;
 }
 
 /** [K,F,U]: franchisee sees only assignments for their own location; admins see all with per-location breakdown. */

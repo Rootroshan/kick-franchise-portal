@@ -1,18 +1,25 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { useClerk } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 
 /**
- * Sign-out control (Lucide LogOut icon). Uses Clerk's signOut() and returns to
- * /sign-in. `useClerk()` is safe here because every shell that renders this is
- * mounted under <ClerkProvider> in production; in local dev-bypass mode Clerk
- * isn't active, so signOut() is a no-op and we just navigate to /sign-in.
+ * Sign-out control (Lucide LogOut icon).
+ *
+ * Deliberately does NOT use Clerk's useClerk()/SignOutButton: in local
+ * dev-bypass mode the layout does not mount <ClerkProvider>, and the hook
+ * THROWS during render ("useClerk can only be used within <ClerkProvider>").
+ * That crashed the whole client subtree it was rendered in — a try/catch in the
+ * handler can't help, because the failure happens at render time, not on click.
+ *
+ * Navigating to Clerk's sign-out route works in both modes: with Clerk active
+ * it clears the session and redirects; in dev-bypass it simply lands on
+ * /sign-in. No provider dependency, no render-time hook.
  *
  * `variant`:
  *  - "sidebar": full-width row for the dark navy sidebars (admin/franchisor)
  *  - "icon":    compact icon-only button for headers
+ *  - "light":   bordered button for light surfaces (store settings)
  */
 export function LogoutButton({
   variant = "sidebar",
@@ -21,14 +28,8 @@ export function LogoutButton({
   variant?: "sidebar" | "icon" | "light";
   collapsed?: boolean;
 }) {
-  const clerk = useClerk();
-
   const signOut = () => {
-    try {
-      void clerk.signOut({ redirectUrl: "/sign-in" });
-    } catch {
-      window.location.href = "/sign-in";
-    }
+    window.location.href = "/sign-out";
   };
 
   if (variant === "light") {

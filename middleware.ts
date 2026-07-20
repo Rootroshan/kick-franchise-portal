@@ -5,6 +5,10 @@ import type { NextRequest } from "next/server";
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
+  // Must be public: it clears the session cookies and redirects to sign-in.
+  // Gating it behind auth would bounce an already-expired session away before
+  // the cookies could be cleared.
+  "/sign-out",
   "/api/webhooks/(.*)",
   "/manifest.webmanifest",
   "/sw.js",
