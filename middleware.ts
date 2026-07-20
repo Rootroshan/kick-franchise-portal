@@ -4,7 +4,13 @@ import type { NextRequest } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
-  "/sign-up(.*)",
+  // Public registration was removed: this is an invite-only admin platform, so
+  // a self-serve /sign-up let anyone create an account. Accounts are now
+  // provisioned in Clerk and granted a role via Membership.
+  //
+  // Both must be public — no session exists yet when they load.
+  "/forgot-password",
+  "/sso-callback(.*)",
   // Must be public: it clears the session cookies and redirects to sign-in.
   // Gating it behind auth would bounce an already-expired session away before
   // the cookies could be cleared.
