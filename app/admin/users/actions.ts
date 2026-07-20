@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { Role } from "@prisma/client";
 import { requireRole } from "@/server/modules/identity/guard";
 import {
@@ -69,20 +70,40 @@ export async function createUserAction(input: {
   return { ok: true, message: "User created." };
 }
 
+/** Full edit payload. Zod validates shape; the service re-checks the rules. */
+const updateUserSchema = z.object({
+  name: z.string().trim().min(1, "Enter a full name.").max(200).optional(),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address.").optional(),
+  phone: z.string().trim().max(50).optional(),
+  role: z.enum(["KICK_ADMIN", "FRANCHISOR_ADMIN", "FRANCHISEE_USER"]).optional(),
+  isActive: z.boolean().optional(),
+  tenantId: z.string().optional(),
+  locationId: z.string().optional(),
+});
+
 export async function updateUserAction(
   id: string,
-  input: { name?: string; phone?: string; role?: string; tenantId?: string; locationId?: string }
+  input: unknown
 ): Promise<ActionResult> {
   const ctx = await requireRole("KICK_ADMIN")();
-  if (input.role !== undefined && !isRole(input.role)) return { ok: false, message: "Select a valid role." };
+
+  const parsed = updateUserSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form and try again." };
+  }
+  const data = parsed.data;
 
   try {
     await updateUser(ctx, id, {
-      name: input.name,
-      phone: input.phone,
-      role: input.role as Role | undefined,
-      tenantId: input.tenantId || null,
-      locationId: input.locationId || null,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      role: data.role,
+      isActive: data.isActive,
+      // Scope is meaningless for a platform admin; the service also forces
+      // this, so a crafted payload cannot create a tenant-scoped KICK_ADMIN.
+      tenantId: data.role === "KICK_ADMIN" ? null : (data.tenantId || null),
+      locationId: data.role === "KICK_ADMIN" ? null : (data.locationId || null),
     });
   } catch (err) {
     return fail(err);

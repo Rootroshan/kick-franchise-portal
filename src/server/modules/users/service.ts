@@ -233,23 +233,72 @@ export async function createUser(ctx: RequestContext, input: CreateUserInput): P
 
 export type UpdateUserInput = {
   name?: string;
+  email?: string;
   phone?: string | null;
   role?: Role;
+  isActive?: boolean;
   tenantId?: string | null;
   locationId?: string | null;
 };
 
+/**
+ * Updates a user and their membership together.
+ *
+ * Self-protection is enforced here rather than in the UI, because this is
+ * where the caller's identity is authoritative: an admin may not strip their
+ * own KICK_ADMIN role or deactivate themselves, either of which could leave
+ * the platform with no reachable administrator.
+ *
+ * Role/tenant/location are re-derived server-side — a FRANCHISEE_USER always
+ * needs an active store, and a KICK_ADMIN is always platform-wide, regardless
+ * of what the client submitted.
+ */
 export async function updateUser(ctx: RequestContext, id: string, input: UpdateUserInput): Promise<void> {
   const before = await getUserById(ctx, id);
   if (!before) throw new Error("User not found.");
+
+  const isSelf = id === ctx.userId;
+  if (isSelf && input.role !== undefined && input.role !== "KICK_ADMIN" && before.role === "KICK_ADMIN") {
+    throw new Error("You cannot remove your own Super Admin role.");
+  }
+  if (isSelf && input.isActive === false) {
+    throw new Error("You cannot deactivate your own account.");
+  }
+
+  const nextRole = input.role ?? before.role ?? "FRANCHISEE_USER";
+
+  if (input.email !== undefined) {
+    const email = input.email.trim().toLowerCase();
+    if (email !== before.email) {
+      const clash = await authPrisma.user.findUnique({ where: { email } });
+      if (clash) throw new Error("An account with that email already exists.");
+    }
+  }
+
+  // A franchisee without an active store cannot sign in (see
+  // loginValidation.ts), so refuse to save a state that locks them out.
+  if (nextRole === "FRANCHISEE_USER") {
+    const locationId = input.locationId ?? before.locationId;
+    if (!locationId) throw new Error("Franchisee users must be assigned to a store.");
+
+    const location = await withTenant(ctx, (tx) => tx.location.findUnique({ where: { id: locationId } }));
+    if (!location) throw new Error("That store no longer exists.");
+    if (location.status !== "active") throw new Error("That store is not active.");
+  }
 
   await authPrisma.user.update({
     where: { id },
     data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
       ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
     },
   });
+
+  // Deactivating must end live sessions, or the user keeps working until their
+  // JWT expires.
+  if (input.isActive === false) await authPrisma.session.deleteMany({ where: { userId: id } });
 
   await withTenant(ctx, async (tx) => {
     if (input.role !== undefined || input.tenantId !== undefined || input.locationId !== undefined) {
@@ -278,8 +327,26 @@ export async function updateUser(ctx: RequestContext, id: string, input: UpdateU
       action: input.role !== undefined ? "user.access_change" : "user.update",
       entity: "User",
       entityId: id,
-      before: { name: before.name, phone: before.phone, role: before.role, tenantId: before.tenantId },
-      after: { name: input.name ?? before.name, phone: input.phone ?? before.phone, role: input.role ?? before.role },
+      // Full before/after of every editable field, so an access change can be
+      // reconstructed later. Credentials are never included.
+      before: {
+        name: before.name,
+        email: before.email,
+        phone: before.phone,
+        role: before.role,
+        isActive: before.isActive,
+        tenantId: before.tenantId,
+        locationId: before.locationId,
+      },
+      after: {
+        name: input.name ?? before.name,
+        email: input.email ?? before.email,
+        phone: input.phone !== undefined ? input.phone : before.phone,
+        role: input.role ?? before.role,
+        isActive: input.isActive ?? before.isActive,
+        tenantId: input.tenantId !== undefined ? input.tenantId : before.tenantId,
+        locationId: input.locationId !== undefined ? input.locationId : before.locationId,
+      },
     });
   });
 }

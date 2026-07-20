@@ -6,6 +6,7 @@ import {
   createUser,
   setUserActive,
   deleteUser,
+  updateUser,
   resetUserPassword,
   getUserKpis,
   listUsers,
@@ -151,6 +152,88 @@ describe("User management", () => {
     expect(after).not.toBe(before);
     expect(await verifyPassword(after!, "a-brand-new-password")).toBe(true);
     expect(await verifyPassword(after!, "original-password")).toBe(false);
+  });
+
+  it("an admin cannot remove their own Super Admin role", async () => {
+    const ctx = kickCtx();
+    const { id } = await createUser(ctx, {
+      name: "Self Admin",
+      email: "selfadmin@example.com",
+      password: "a-long-enough-password",
+      role: "KICK_ADMIN",
+      isActive: true,
+    });
+
+    // Demoting yourself could leave the platform with no reachable admin.
+    const selfCtx = { ...ctx, userId: id };
+    await expect(updateUser(selfCtx, id, { role: "FRANCHISEE_USER" })).rejects.toThrow(/own Super Admin role/i);
+  });
+
+  it("an admin cannot deactivate themself through the edit form", async () => {
+    const ctx = kickCtx();
+    const { id } = await createUser(ctx, {
+      name: "Self Admin 2",
+      email: "selfadmin2@example.com",
+      password: "a-long-enough-password",
+      role: "KICK_ADMIN",
+      isActive: true,
+    });
+
+    const selfCtx = { ...ctx, userId: id };
+    await expect(updateUser(selfCtx, id, { isActive: false })).rejects.toThrow(/your own account/i);
+  });
+
+  it("rejects an edit that would collide with another user's email", async () => {
+    const ctx = kickCtx();
+    const base = { password: "a-long-enough-password", role: "FRANCHISEE_USER" as const, isActive: true };
+    await createUser(ctx, { ...base, name: "One", email: "one@example.com" });
+    const { id } = await createUser(ctx, { ...base, name: "Two", email: "two@example.com" });
+
+    await expect(updateUser(ctx, id, { email: "one@example.com" })).rejects.toThrow(/already exists/i);
+  });
+
+  it("refuses to leave a franchisee without an active store", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const ctx = kickCtx();
+    const { id } = await createUser(ctx, {
+      name: "Store User",
+      email: "storeuser@example.com",
+      password: "a-long-enough-password",
+      role: "FRANCHISEE_USER",
+      isActive: true,
+      tenantId: tenant.id,
+      locationId: location.id,
+    });
+
+    await withTenant(ctx, (tx) => tx.location.update({ where: { id: location.id }, data: { status: "inactive" } }));
+
+    // Saving this state would lock the user out at login, so it is refused.
+    await expect(updateUser(ctx, id, { role: "FRANCHISEE_USER", locationId: location.id })).rejects.toThrow(
+      /not active/i
+    );
+  });
+
+  it("records before and after values for an edit", async () => {
+    const ctx = kickCtx();
+    const { id } = await createUser(ctx, {
+      name: "Before Name",
+      email: "beforeafter@example.com",
+      password: "a-long-enough-password",
+      // KICK_ADMIN needs no store, so this exercises the audit trail without
+      // tripping the franchisee store requirement.
+      role: "KICK_ADMIN",
+      isActive: true,
+    });
+
+    await updateUser(ctx, id, { name: "After Name", phone: "+61 400 000 000" });
+
+    const logs = await withTenant(ctx, (tx) =>
+      tx.auditLog.findMany({ where: { entity: "User", entityId: id, action: "user.update" } })
+    );
+    expect(logs).toHaveLength(1);
+    expect(JSON.stringify(logs[0]!.before)).toContain("Before Name");
+    expect(JSON.stringify(logs[0]!.after)).toContain("After Name");
+    expect(JSON.stringify(logs)).not.toContain("a-long-enough-password");
   });
 
   it("writes an audit entry for create, status change and delete", async () => {

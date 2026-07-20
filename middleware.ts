@@ -12,6 +12,9 @@ const PUBLIC_PATTERNS: RegExp[] = [
   //
   // These must be public — no session exists yet when they load.
   /^\/forgot-password$/,
+  // Brand portal login. Public by necessity — it is where an unauthenticated
+  // tenant user starts, and it resolves its own tenant from the Host header.
+  /^\/portal-login$/,
   /^\/api\/auth(\/.*)?$/, // NextAuth's own callback/session/CSRF endpoints
   // Must be public: it clears the session cookie and redirects to sign-in.
   // Gating it behind auth would bounce an already-expired session away before

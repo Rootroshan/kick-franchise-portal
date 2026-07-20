@@ -188,6 +188,7 @@ export function UsersTable({
               user={dialog.user}
               mode={dialog.kind}
               brandOptions={brandOptions}
+              isSelf={dialog.user.id === currentUserId}
               pending={pending}
               onSubmit={(data) => run(() => updateUserAction(dialog.user.id, data))}
             />
@@ -423,58 +424,118 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Edit / Manage Access form.
+ *
+ * `mode` decides which fields show — "edit" for profile details, "access" for
+ * role and scope — but both submit through the same validated action, so the
+ * server rules apply either way.
+ *
+ * Deactivating asks for confirmation inline: it signs the user out
+ * immediately, which is not obvious from a checkbox alone.
+ */
 function EditForm({
   user,
   mode,
   brandOptions,
+  isSelf,
   pending,
   onSubmit,
 }: {
   user: UserRow;
   mode: "edit" | "access";
   brandOptions: Option[];
+  isSelf: boolean;
   pending: boolean;
-  onSubmit: (data: { name?: string; phone?: string; role?: string; tenantId?: string }) => void;
+  onSubmit: (data: Record<string, unknown>) => void;
 }) {
   const [name, setName] = useState(user.name ?? "");
+  const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState<string>(user.role ?? "FRANCHISEE_USER");
   const [tenantId, setTenantId] = useState(user.tenantId ?? "");
+  const [isActive, setIsActive] = useState(user.isActive);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+
+  const willDeactivate = user.isActive && !isActive;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (willDeactivate && !confirmDeactivate) {
+      setConfirmDeactivate(true);
+      return;
+    }
+    onSubmit(
+      mode === "edit"
+        ? { name, email, phone, isActive }
+        : { role, tenantId: role === "KICK_ADMIN" ? "" : tenantId }
+    );
+  };
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit(mode === "edit" ? { name, phone } : { role, tenantId });
-      }}
-      className="flex flex-col gap-3"
-    >
+    <form onSubmit={submit} className="flex flex-col gap-3">
       {mode === "edit" ? (
         <>
           <Labelled label="Full name">
-            <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} disabled={pending} />
+            <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+          <Labelled label="Email">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} disabled={pending} required />
           </Labelled>
           <Labelled label="Phone">
             <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} disabled={pending} />
           </Labelled>
+
+          <label className={cn("flex items-center gap-2 text-sm", isSelf ? "cursor-not-allowed opacity-60" : "cursor-pointer")}>
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => {
+                setIsActive(e.target.checked);
+                setConfirmDeactivate(false);
+              }}
+              // Self-deactivation is blocked server-side; disabling here just
+              // avoids offering an action that will be refused.
+              disabled={pending || isSelf}
+              className="h-4 w-4 rounded border-border accent-status-info"
+            />
+            Active — can sign in
+            {isSelf && <span className="text-xs text-muted-foreground">(cannot change your own)</span>}
+          </label>
+
+          {willDeactivate && confirmDeactivate && (
+            <div className="flex items-start gap-2 rounded-lg bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <strong>{user.email}</strong> will be signed out immediately. Press Save again to confirm.
+              </span>
+            </div>
+          )}
         </>
       ) : (
         <>
           <Labelled label="Role">
-            <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls} disabled={pending}>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className={inputCls}
+              // An admin removing their own Super Admin role could lock the
+              // platform out; refused server-side too.
+              disabled={pending || (isSelf && user.role === "KICK_ADMIN")}
+            >
               <option value="KICK_ADMIN">Super Admin</option>
               <option value="FRANCHISOR_ADMIN">Franchisor Admin</option>
               <option value="FRANCHISEE_USER">Franchisee User</option>
             </select>
           </Labelled>
+
+          {isSelf && user.role === "KICK_ADMIN" && (
+            <p className="text-xs text-muted-foreground">You cannot change your own Super Admin role.</p>
+          )}
+
           {role !== "KICK_ADMIN" && (
-            <Labelled label="Brand">
-              <select
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-                className={inputCls}
-                disabled={pending}
-              >
+            <Labelled label="Brand access">
+              <select value={tenantId} onChange={(e) => setTenantId(e.target.value)} className={inputCls} disabled={pending} required>
                 <option value="">Select a brand…</option>
                 {brandOptions.map((b) => (
                   <option key={b.value} value={b.value}>{b.label}</option>
@@ -482,17 +543,20 @@ function EditForm({
               </select>
             </Labelled>
           )}
-          {role === "KICK_ADMIN" && (
-            <p className="text-xs text-muted-foreground">
-              Super Admins have platform-wide access, so no brand is assigned.
-            </p>
-          )}
+
+          <p className="text-xs text-muted-foreground">
+            {role === "KICK_ADMIN"
+              ? "Super Admins have platform-wide access, so no brand is assigned."
+              : role === "FRANCHISOR_ADMIN"
+                ? "Franchisor Admins manage one brand's stores, announcements and tasks. They have no access to commerce, pricing, orders, allowances, rebates or payments."
+                : "Franchisee Users are scoped to one store and must have an active store assigned."}
+          </p>
         </>
       )}
 
       <button type="submit" disabled={pending} className={primaryBtn}>
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-        Save changes
+        {willDeactivate && confirmDeactivate ? "Confirm & save" : "Save changes"}
       </button>
     </form>
   );
