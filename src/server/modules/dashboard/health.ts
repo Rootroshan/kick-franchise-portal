@@ -3,6 +3,48 @@ import { getEnv } from "@/lib/env";
 
 export type ServiceHealth = { name: string; status: "ok" | "degraded" | "down" | "not_configured" };
 
+export type StorageUsage = {
+  totalBytes: number;
+  assetCount: number;
+  byTenant: Array<{ tenantId: string; tenantName: string; bytes: number; assetCount: number }>;
+};
+
+/**
+ * Storage usage derived from Asset.sizeBytes rather than R2's API: R2 exposes
+ * no cheap "bucket size" call, so the alternative is paginating every object on
+ * each page load. This counts ACTIVE assets only — archived rows keep their
+ * bytes in the table but no longer represent live storage the admin can act on.
+ *
+ * Caveat: an object orphaned in R2 by a failed upload has no Asset row and so
+ * is not counted. Under-reporting a stray file is preferable to a slow page.
+ */
+export async function getStorageUsage(): Promise<StorageUsage> {
+  const rows = await prisma.asset.groupBy({
+    by: ["tenantId"],
+    where: { status: "ACTIVE" },
+    _sum: { sizeBytes: true },
+    _count: { _all: true },
+  });
+
+  const tenants = await prisma.tenant.findMany({ select: { id: true, name: true } });
+  const nameById = new Map(tenants.map((t) => [t.id, t.name]));
+
+  const byTenant = rows
+    .map((r) => ({
+      tenantId: r.tenantId,
+      tenantName: nameById.get(r.tenantId) ?? "Unknown brand",
+      bytes: r._sum.sizeBytes ?? 0,
+      assetCount: r._count._all,
+    }))
+    .sort((a, b) => b.bytes - a.bytes);
+
+  return {
+    totalBytes: byTenant.reduce((sum, t) => sum + t.bytes, 0),
+    assetCount: byTenant.reduce((sum, t) => sum + t.assetCount, 0),
+    byTenant,
+  };
+}
+
 /**
  * Safe platform health snapshot. Never exposes secret values — only reports
  * whether each service is reachable/configured. DB is actively pinged;
