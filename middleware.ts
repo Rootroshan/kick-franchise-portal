@@ -90,12 +90,22 @@ export default devBypassEnabled
         // renders AT the domain root. A redirect would put /portal-login in
         // the address bar; a rewrite keeps the URL as
         // https://portal.brand.com/ while serving that page's content.
-        const rewriteUrl = req.nextUrl.clone();
-        rewriteUrl.pathname = "/portal-login";
+        //
+        // req.nextUrl.clone() inherits nextUrl.origin, which on Vercel is the
+        // CANONICAL DEPLOYMENT URL, not the incoming host — the same trap the
+        // redirect branch above avoids. Left as-is, the rewrite target pointed
+        // at kick-franchise-portal.vercel.app instead of the tenant's own
+        // domain, which Next treats as a cross-host proxy rather than an
+        // internal rewrite and silently failed to resolve the tenant.
+        const rewriteUrl = new URL(`/portal-login${req.nextUrl.search}`, `${proto}://${host}`);
         rewriteUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
-        const res = NextResponse.rewrite(rewriteUrl);
-        res.headers.set("x-kick-host", host);
-        return res;
+
+        // The rewritten REQUEST must carry the original host: the page resolves
+        // its tenant from it, and setting the header on the response is too
+        // late — the page has already rendered by then.
+        const headers = new Headers(req.headers);
+        headers.set("x-kick-host", host);
+        return NextResponse.rewrite(rewriteUrl, { request: { headers } });
       }
       return withHostHeader(req, { authenticated: isProtected });
     }) as unknown as (req: NextRequest) => NextResponse | Promise<NextResponse>;

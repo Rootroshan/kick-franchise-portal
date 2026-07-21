@@ -36,12 +36,29 @@ export async function resolveTenantFromHost(host: string): Promise<ResolvedTenan
   }
 
   // Custom domain match — must be VERIFIED to resolve.
-  const custom = await withTenant(systemKickContext(), (tx) =>
-    tx.customDomain.findUnique({
-      where: { hostname },
-      include: { tenant: true },
-    })
-  );
+  let custom;
+  try {
+    custom = await withTenant(systemKickContext(), (tx) =>
+      tx.customDomain.findUnique({
+        where: { hostname },
+        include: { tenant: true },
+      })
+    );
+  } catch (err) {
+    // A thrown query and "no such domain" both ended up as a silent null,
+    // which made a connection failure indistinguishable from an unknown host.
+    console.error(`[tenantResolution] lookup failed for "${hostname}":`, err);
+    return null;
+  }
+
+  if (!custom) {
+    console.warn(`[tenantResolution] no CustomDomain row for "${hostname}"`);
+  } else if (custom.status !== "VERIFIED" || custom.tenant.status !== "active") {
+    console.warn(
+      `[tenantResolution] "${hostname}" found but not servable: domain=${custom.status} tenant=${custom.tenant.status}`
+    );
+  }
+
   if (custom && custom.status === "VERIFIED" && custom.tenant.status === "active") {
     return {
       id: custom.tenant.id,

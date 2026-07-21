@@ -20,7 +20,11 @@ export const dynamic = "force-dynamic";
  * brand that does not exist would invite credential stuffing against it.
  */
 export default async function PortalLoginPage() {
-  const host = (await headers()).get("host") ?? "";
+  // x-kick-host first: the middleware rewrites the custom domain root to this
+  // page and forwards the ORIGINAL host there. Reading `host` alone would see
+  // the rewritten request and fail to resolve the tenant.
+  const hdrs = await headers();
+  const host = hdrs.get("x-kick-host") || hdrs.get("host") || "";
   const tenant = await resolveTenantFromHost(host);
 
   if (!tenant) {
