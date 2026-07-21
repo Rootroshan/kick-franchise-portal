@@ -3,7 +3,7 @@ import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { HttpError } from "@/server/modules/identity/errors";
 import { normaliseHostname, verificationRecordName, shortHostLabel } from "./domainNormalise";
-import { cnameTarget, attachDomain, detachDomain, isHostingConfigured } from "./hostingProvider";
+import { cnameTarget, attachDomain, detachDomain, isHostingConfigured, getDomainHostingStatus } from "./hostingProvider";
 import type { z } from "zod";
 import type {
   createTenantSchema,
@@ -180,6 +180,50 @@ export async function createCustomDomain(ctx: RequestContext, tenantId: string, 
  * Real DNS lookup requires the `dns` module (Node runtime) — this performs
  * that check and flips status to VERIFIED on success.
  */
+/**
+ * Composite live status: DB `status` only ever records DNS TXT ownership at
+ * the moment verifyCustomDomain last ran, not whether the domain is
+ * currently attached/DNS-pointed/serving over TLS. A domain can read
+ * VERIFIED forever even if the CNAME was later removed or never finished
+ * propagating. This re-queries the hosting provider every call so "Refresh
+ * Status" reflects reality, not a stale DB flag (spec: never mark a domain
+ * verified based only on a database value).
+ */
+export type LiveDomainStatus =
+  | "NOT_CONFIGURED"
+  | "DNS_REQUIRED"
+  | "PENDING_DNS"
+  | "OWNERSHIP_VERIFIED"
+  | "CNAME_VERIFIED"
+  | "SSL_PROVISIONING"
+  | "ACTIVE"
+  | "FAILED";
+
+export async function getLiveDomainStatus(
+  ctx: RequestContext,
+  domainId: string
+): Promise<{ status: LiveDomainStatus; detail?: string }> {
+  return withTenant(ctx, async (tx) => {
+    const domain = await tx.customDomain.findUnique({ where: { id: domainId } });
+    if (!domain) throw new HttpError(404, "Domain not found");
+
+    if (domain.status === "PENDING") return { status: "DNS_REQUIRED" };
+    if (domain.status === "FAILED") return { status: "FAILED" };
+
+    // status === "VERIFIED": ownership passed at some point. Whether it is
+    // actually serving now depends on live hosting state, not this flag.
+    if (!isHostingConfigured()) {
+      return { status: "OWNERSHIP_VERIFIED", detail: "Hosting integration is not configured." };
+    }
+
+    const hosting = await getDomainHostingStatus(domain.hostname);
+    if (!hosting.attached) return { status: "OWNERSHIP_VERIFIED", detail: hosting.detail };
+    if (!hosting.dnsConfigured) return { status: "PENDING_DNS", detail: hosting.detail };
+    if (!hosting.sslReady) return { status: "SSL_PROVISIONING", detail: hosting.detail };
+    return { status: "ACTIVE" };
+  });
+}
+
 export async function verifyCustomDomain(ctx: RequestContext, domainId: string) {
   return withTenant(ctx, async (tx) => {
     const domain = await tx.customDomain.findUnique({ where: { id: domainId } });

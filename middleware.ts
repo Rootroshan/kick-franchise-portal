@@ -77,7 +77,10 @@ export default devBypassEnabled
         const host = req.headers.get("host") ?? req.nextUrl.host;
         const proto = req.headers.get("x-forwarded-proto") ?? "https";
         const base = (process.env.APP_BASE_DOMAIN ?? "").toLowerCase();
-        const bare = host.split(":")[0]?.toLowerCase() ?? "";
+        // Strip port and a leading "www." — a brand operator pointing
+        // www.portal.brand.com at the same CNAME must resolve identically to
+        // the bare host, not fall through to "unknown domain".
+        const bare = (host.split(":")[0]?.toLowerCase() ?? "").replace(/^www\./, "");
         const isPlatformHost = !base || bare === base || bare.endsWith(".vercel.app") || bare === "localhost";
 
         if (isPlatformHost) {

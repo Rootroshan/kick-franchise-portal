@@ -15,7 +15,14 @@ export type ResolvedTenant = {
  * custom domain. This runs on every request via middleware.ts.
  */
 export async function resolveTenantFromHost(host: string): Promise<ResolvedTenant | null> {
-  const hostname = host.split(":")[0]?.toLowerCase().trim();
+  // Strip port and a leading "www." — an owner pointing www.portal.brand.com
+  // at the same CNAME must resolve identically to the bare host, matching the
+  // same normalisation middleware.ts applies before classifying the request.
+  const hostname = host
+    .split(":")[0]
+    ?.toLowerCase()
+    .trim()
+    .replace(/^www\./, "");
   if (!hostname) return null;
 
   const baseDomain = (process.env.APP_BASE_DOMAIN ?? "").toLowerCase();
