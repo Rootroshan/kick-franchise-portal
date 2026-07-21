@@ -5,6 +5,11 @@ import { isDevBypassEnabled } from "@/lib/devBypass";
 // Reads/writes the session cookie, so it can never be prerendered.
 export const dynamic = "force-dynamic";
 
+// Must be forced to the Node runtime: signOut() comes from ./config, which
+// pulls in argon2 (native binary) and Prisma — neither works on Edge. See the
+// matching comment in app/api/auth/[...nextauth]/route.ts.
+export const runtime = "nodejs";
+
 /**
  * Sign-out. A plain navigation target so the client button needs no hook and
  * no provider context.
