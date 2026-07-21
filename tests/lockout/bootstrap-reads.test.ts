@@ -17,16 +17,16 @@ describe("Bootstrap reads that must work before role/tenant context exists", () 
     await resetDatabase();
   });
 
-  it("resolves a tenant by subdomain slug even though no role/tenant context exists yet", async () => {
-    const { tenant } = await seedTenantWithLocation();
+  it("resolves a tenant by its verified portal domain before request context exists", async () => {
+    const { tenant, domain } = await seedTenantWithLocation();
     process.env.APP_BASE_DOMAIN = "portal.kickmedia.test";
 
-    const resolved = await resolveTenantFromHost(`${tenant.slug}.portal.kickmedia.test`);
+    const resolved = await resolveTenantFromHost(domain.hostname);
     expect(resolved).not.toBeNull();
     expect(resolved!.id).toBe(tenant.id);
   });
 
-  it("returns null (not a crash) for an unknown subdomain", async () => {
+  it("returns null (not a crash) for an unknown portal domain", async () => {
     process.env.APP_BASE_DOMAIN = "portal.kickmedia.test";
     const resolved = await resolveTenantFromHost("nonexistent-brand.portal.kickmedia.test");
     expect(resolved).toBeNull();

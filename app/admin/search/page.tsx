@@ -21,7 +21,7 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
       <Section title="Brands" items={results.brands} render={(b) => (
         <Link key={b.id} href={`/admin/tenants/${b.id}`} className="block rounded-lg border border-border bg-card p-3 hover:bg-muted">
           <div className="font-medium">{b.name}</div>
-          <div className="text-xs text-muted-foreground">{b.slug}</div>
+          <div className="text-xs text-muted-foreground">{b.domain ?? "Domain pending"}</div>
         </Link>
       )} />
 

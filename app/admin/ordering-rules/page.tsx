@@ -20,7 +20,7 @@ export default async function OrderingRulesPage() {
           <Link href="/admin/tenants" className="underline">
             Tenants
           </Link>{" "}
-          or visit its subdomain to manage its ordering rules.
+          or open its verified portal domain to manage its ordering rules.
         </p>
       </div>
     );

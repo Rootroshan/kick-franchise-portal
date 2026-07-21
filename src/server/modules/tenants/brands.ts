@@ -10,7 +10,6 @@ const netRevenue = (o: { subtotalCents: number; refundedCents: number }) => o.su
 export type BrandRow = {
   id: string;
   name: string;
-  slug: string;
   status: string;
   createdAt: Date;
   storeCount: number;
@@ -35,7 +34,6 @@ export async function listBrands(ctx: RequestContext, q: AdminListQuery): Promis
         ? {
             OR: [
               { name: { contains: q.search, mode: "insensitive" as const } },
-              { slug: { contains: q.search, mode: "insensitive" as const } },
               // Domains live on a related table, so this needs a relation
               // filter rather than another column comparison.
               { customDomains: { some: { hostname: { contains: q.search, mode: "insensitive" as const } } } },
@@ -91,7 +89,6 @@ export async function listBrands(ctx: RequestContext, q: AdminListQuery): Promis
     const rows: BrandRow[] = tenants.map((t) => ({
       id: t.id,
       name: t.name,
-      slug: t.slug,
       status: t.status,
       createdAt: t.createdAt,
       storeCount: (storeMap.get(t.id) as number) ?? 0,
@@ -135,7 +132,6 @@ export type BrandDetail = {
   id: string;
   name: string;
   legalName: string | null;
-  slug: string;
   status: string;
   createdAt: Date;
   theme: Record<string, unknown>;
@@ -178,11 +174,11 @@ export type BrandDetail = {
   domains: Array<{ id: string; hostname: string; status: string }>;
 };
 
-/** Fetch one brand by its clean slug (URL-friendly). KICK_ADMIN only. */
+/** Fetch one brand by stable ID; the old internal key remains a compatibility fallback. */
 export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise<BrandDetail> {
   return withTenant(ctx, async (tx) => {
-    const t = await tx.tenant.findUnique({
-      where: { slug },
+    const t = await tx.tenant.findFirst({
+      where: { OR: [{ id: slug }, { slug }] },
       include: {
         locations: { orderBy: { name: "asc" } },
         memberships: true,
@@ -232,7 +228,6 @@ export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise
       website: t.website,
       id: t.id,
       name: t.name,
-      slug: t.slug,
       status: t.status,
       createdAt: t.createdAt,
       theme: (t.theme as Record<string, unknown>) ?? {},

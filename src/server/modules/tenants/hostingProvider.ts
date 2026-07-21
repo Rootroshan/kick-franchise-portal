@@ -45,6 +45,8 @@ export function isHostingConfigured(): boolean {
 
 /** The CNAME target owners must point at. Derived, never hard-coded per brand. */
 export function cnameTarget(): string {
+  const configuredTarget = process.env.PORTAL_CNAME_TARGET?.trim().toLowerCase().replace(/\.$/, "");
+  if (configuredTarget) return configuredTarget;
   return "cname.vercel-dns.com";
 }
 

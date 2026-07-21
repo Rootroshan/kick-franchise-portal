@@ -69,7 +69,7 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
             {brand.name}
           </span>
         }
-        description={`${brand.slug} · Created ${brand.createdAt.toLocaleDateString("en-CA", { day: "2-digit", month: "short", year: "numeric" })} · ID ${brand.id.slice(0, 8).toUpperCase()}`}
+        description={`Created ${brand.createdAt.toLocaleDateString("en-CA", { day: "2-digit", month: "short", year: "numeric" })} · ID ${brand.id.slice(0, 8).toUpperCase()}`}
         secondaryAction={
           <div className="flex items-center gap-2">
             <StatusBadge status={brand.status} />
@@ -128,7 +128,7 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
       <div className="grid min-w-0 gap-6 xl:grid-cols-3">
         <section className="flex min-w-0 flex-col gap-6 xl:col-span-2">
           <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm">
-            <StoresPanel tenantId={brand.id} slug={brand.slug} stores={brand.stores} />
+            <StoresPanel tenantId={brand.id} slug={brand.id} stores={brand.stores} />
           </div>
 
           {/* Franchisor admins get their own section: creating one here pins
@@ -138,7 +138,7 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
           <div className="min-w-0 rounded-xl border border-border bg-card p-4">
             <FranchisorAdminsPanel
               tenantId={brand.id}
-              slug={brand.slug}
+              slug={brand.id}
               admins={franchisorAdmins}
               invitations={franchisorAdminInvitations}
             />

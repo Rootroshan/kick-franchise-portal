@@ -14,7 +14,7 @@ import { validatePortalLogin, validateAdminLogin } from "@/server/auth/loginVali
 
 // resolveTenantFromHost is exercised for real elsewhere; here it is stubbed so
 // each case can control which tenant a hostname maps to.
-const hostToTenant = new Map<string, { id: string; slug: string; name: string; theme: unknown; status: string }>();
+const hostToTenant = new Map<string, { id: string; name: string; theme: unknown; status: string }>();
 
 vi.mock("@/server/modules/identity/tenantResolution", () => ({
   resolveTenantFromHost: async (host: string) => hostToTenant.get(host) ?? null,
@@ -30,7 +30,6 @@ describe("Portal login validation", () => {
     const { tenant, location } = await seedTenantWithLocation();
     hostToTenant.set("portal.brand-a.com", {
       id: tenant.id,
-      slug: tenant.slug,
       name: tenant.name,
       theme: {},
       status: "active",

@@ -63,9 +63,18 @@ export async function seedTenantWithLocation() {
     const tenant = await tx.tenant.create({
       data: { name: "Test Brand", slug: `test-brand-${Date.now()}-${Math.floor(Math.random() * 1e6)}` },
     });
+    const domain = await tx.customDomain.create({
+      data: {
+        tenantId: tenant.id,
+        hostname: `portal.${tenant.slug}.test`,
+        status: "VERIFIED",
+        verificationToken: `test-${tenant.id}`,
+        verifiedAt: new Date(),
+      },
+    });
     const location = await tx.location.create({
       data: { tenantId: tenant.id, name: "Test Store #1" },
     });
-    return { tenant, location };
+    return { tenant, location, domain };
   });
 }

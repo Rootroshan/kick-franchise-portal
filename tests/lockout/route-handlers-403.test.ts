@@ -72,7 +72,7 @@ function makeRequest(method: string, path: string, body?: unknown): Request {
 
 describe("Lockout: every commerce/allowance/rebate route handler returns 403 for FRANCHISOR_ADMIN", () => {
   let tenantId: string;
-  let tenantSlug: string;
+  let tenantDomain: string;
 
   beforeAll(async () => {
     process.env.APP_BASE_DOMAIN = "portal.kickmedia.test";
@@ -80,9 +80,9 @@ describe("Lockout: every commerce/allowance/rebate route handler returns 403 for
 
   beforeEach(async () => {
     await resetDatabase();
-    const { tenant } = await seedTenantWithLocation();
+    const { tenant, domain } = await seedTenantWithLocation();
     tenantId = tenant.id;
-    tenantSlug = tenant.slug;
+    tenantDomain = domain.hostname;
 
     await withTenant(kickCtx(), (tx) =>
       tx.membership.create({
@@ -90,7 +90,7 @@ describe("Lockout: every commerce/allowance/rebate route handler returns 403 for
       })
     );
     authState.userId = "franchisor-lockout-test";
-    authState.host = `${tenantSlug}.portal.kickmedia.test`;
+    authState.host = tenantDomain;
   });
 
   for (const route of PROTECTED_ROUTES) {

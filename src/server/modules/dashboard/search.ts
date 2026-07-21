@@ -1,7 +1,7 @@
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 
 export type SearchResults = {
-  brands: Array<{ id: string; name: string; slug: string }>;
+  brands: Array<{ id: string; name: string; domain: string | null }>;
   stores: Array<{ id: string; name: string; tenantName: string }>;
   users: Array<{ id: string; name: string; email: string | null; role: string }>;
   orders: Array<{ id: string; tenantName: string; storeName: string; status: string }>;
@@ -17,7 +17,11 @@ export async function adminSearch(ctx: RequestContext, q: string): Promise<Searc
 
   return withTenant(ctx, async (tx) => {
     const [brands, stores, users, orders, products] = await Promise.all([
-      tx.tenant.findMany({ where: { OR: [{ name: ci }, { slug: ci }] }, take: 8 }),
+      tx.tenant.findMany({
+        where: { OR: [{ name: ci }, { customDomains: { some: { hostname: ci } } }] },
+        include: { customDomains: { select: { hostname: true }, take: 1, orderBy: { createdAt: "asc" } } },
+        take: 8,
+      }),
       tx.location.findMany({ where: { name: ci }, take: 8, include: { tenant: true } }),
       tx.membership.findMany({ where: { OR: [{ email: ci }, { displayName: ci }] }, take: 8 }),
       // Order id is a uuid — match on prefix; also match by store name.
@@ -26,7 +30,7 @@ export async function adminSearch(ctx: RequestContext, q: string): Promise<Searc
     ]);
 
     return {
-      brands: brands.map((b) => ({ id: b.id, name: b.name, slug: b.slug })),
+      brands: brands.map((b) => ({ id: b.id, name: b.name, domain: b.customDomains[0]?.hostname ?? null })),
       stores: stores.map((s) => ({ id: s.id, name: s.name, tenantName: s.tenant.name })),
       users: users.map((u) => ({ id: u.id, name: u.displayName ?? "(no name)", email: u.email, role: u.role })),
       orders: orders.map((o) => ({ id: o.id, tenantName: o.tenant.name, storeName: o.location.name, status: o.status })),

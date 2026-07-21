@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getSetting } from "@/server/modules/settings/platformSettings";
 
@@ -74,4 +74,14 @@ export async function createPresignedDownloadUrl(key: string, ttlSeconds = 300):
 export async function deleteStorageObject(key: string): Promise<void> {
   const [s3, Bucket] = await Promise.all([r2Client(), r2Bucket()]);
   await s3.send(new DeleteObjectCommand({ Bucket, Key: key }));
+}
+
+export async function storageObjectExists(key: string): Promise<boolean> {
+  const [s3, Bucket] = await Promise.all([r2Client(), r2Bucket()]);
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
 }

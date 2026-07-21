@@ -110,7 +110,10 @@ enum NotificationCategory {
 model Tenant {
   id         String   @id @default(uuid())
   name       String
-  slug       String   @unique // brandx -> brandx.portal.kickmedia.com
+  /// Backwards-compatibility value only. Public tenant routing uses CustomDomain.hostname.
+  slug       String   @unique
+  internalKey String? @unique
+  idempotencyKey String? @unique
   clerkOrgId String?  @unique // Clerk Organization id backing this tenant (spec §9)
   status     String   @default("active")
   theme      Json     @default("{}") // { logoUrl, primary, secondary, font }

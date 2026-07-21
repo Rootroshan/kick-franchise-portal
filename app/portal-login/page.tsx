@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * Shared brand portal login.
  *
  * One page serves every franchise brand. The tenant is resolved from the Host
- * header — wildcard subdomain or verified custom domain — so nothing about the
+ * header — a verified custom domain — so nothing about the
  * brand is hard-coded and a client cannot aim the page at another tenant.
  *
  * Unknown hosts, unverified domains and inactive tenants all resolve to null

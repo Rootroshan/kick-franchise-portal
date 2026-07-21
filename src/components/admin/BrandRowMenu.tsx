@@ -83,15 +83,15 @@ export function BrandRowMenu({ brand }: { brand: BrandRow }) {
     setOpen(false);
     switch (kind) {
       case "view":
-        router.push(`/admin/brands/${brand.slug}`);
+        router.push(`/admin/brands/${brand.id}`);
         break;
       case "edit":
         // Edit lives on the detail page, where the full form and its
         // prefilled values already exist.
-        router.push(`/admin/brands/${brand.slug}#edit`);
+        router.push(`/admin/brands/${brand.id}#edit`);
         break;
       case "domain":
-        router.push(`/admin/brands/${brand.slug}#domains`);
+        router.push(`/admin/brands/${brand.id}#domains`);
         break;
       default:
         setDialog(kind === "delete" ? "delete" : "toggle");
@@ -248,8 +248,7 @@ function DeleteBrandDialog({
             <p className="text-xs text-muted-foreground">You are about to delete the brand:</p>
             <p className="truncate font-semibold text-foreground">{brand.name}</p>
             <p className="truncate text-xs text-muted-foreground">
-              {brand.slug}
-              {brand.customDomain ? ` · ${brand.customDomain}` : ""}
+              {brand.customDomain ?? "Domain pending"}
             </p>
           </div>
           <dl className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1 text-right text-xs">

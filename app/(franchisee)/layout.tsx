@@ -8,7 +8,7 @@ export default async function FranchiseeLayout({ children }: { children: React.R
   try {
     const ctx = await getRequestContext();
     if (ctx.role === "KICK_ADMIN") redirect("/admin");
-    if (ctx.role === "FRANCHISOR_ADMIN") redirect("/franchisor/announcements");
+    if (ctx.role === "FRANCHISOR_ADMIN") redirect("/franchisor/dashboard");
   } catch (err) {
     if (err instanceof HttpError) {
       // 401 = not signed in. 404 = signed in but no tenant resolves for this

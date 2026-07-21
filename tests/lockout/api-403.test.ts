@@ -32,7 +32,7 @@ describe("Lockout: requireRole('KICK_ADMIN') rejects FRANCHISOR_ADMIN with 403",
   });
 
   it("throws 403 for a FRANCHISOR_ADMIN token, matching every commerce/allowance/rebate route's guard", async () => {
-    const { tenant } = await seedTenantWithLocation();
+    const { tenant, domain } = await seedTenantWithLocation();
     await withTenant(kickCtx(), (tx) =>
       tx.membership.create({
         data: { clerkUserId: "franchisor-1", tenantId: tenant.id, role: "FRANCHISOR_ADMIN" },
@@ -40,7 +40,7 @@ describe("Lockout: requireRole('KICK_ADMIN') rejects FRANCHISOR_ADMIN with 403",
     );
 
     authState.userId = "franchisor-1";
-    authState.host = `${tenant.slug}.portal.kickmedia.test`;
+    authState.host = domain.hostname;
     process.env.APP_BASE_DOMAIN = "portal.kickmedia.test";
 
     await expect(requireRole("KICK_ADMIN")()).rejects.toMatchObject({ status: 403 });
@@ -62,14 +62,14 @@ describe("Lockout: requireRole('KICK_ADMIN') rejects FRANCHISOR_ADMIN with 403",
   });
 
   it("throws 403 for a FRANCHISEE_USER token on a KICK_ADMIN-only route", async () => {
-    const { tenant, location } = await seedTenantWithLocation();
+    const { tenant, location, domain } = await seedTenantWithLocation();
     await withTenant(kickCtx(), (tx) =>
       tx.membership.create({
         data: { clerkUserId: "franchisee-1", tenantId: tenant.id, locationId: location.id, role: "FRANCHISEE_USER" },
       })
     );
     authState.userId = "franchisee-1";
-    authState.host = `${tenant.slug}.portal.kickmedia.test`;
+    authState.host = domain.hostname;
 
     await expect(requireRole("KICK_ADMIN")()).rejects.toMatchObject({ status: 403 });
   });

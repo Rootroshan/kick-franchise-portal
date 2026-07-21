@@ -22,6 +22,7 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional().default(""),
   VAPID_SUBJECT: z.string().optional().default("mailto:ops@kickmedia.com"),
   APP_BASE_DOMAIN: z.string().min(1).default("portal.kickmedia.com"),
+  PORTAL_CNAME_TARGET: z.string().optional().default(""),
   // Hosting provider (Vercel Domains). Optional: without these, custom domains
   // still verify ownership but must be attached to the host manually.
   VERCEL_API_TOKEN: z.string().optional().default(""),

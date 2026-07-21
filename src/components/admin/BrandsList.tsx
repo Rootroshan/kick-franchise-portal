@@ -1,4 +1,5 @@
 import Link from "next/link";
+/* eslint-disable @next/next/no-img-element -- brand logos use per-tenant URLs that cannot be allowlisted at build time. */
 import { Globe, ArrowRight, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { formatCents } from "@/lib/utils";
 import { parseTenantTheme } from "@/lib/theme";
@@ -11,7 +12,7 @@ import { cn } from "@/lib/utils";
  *
  * Contrast is deliberate — brand name, counts and revenue use foreground text
  * rather than muted, because these are the values being scanned. Muted is
- * reserved for labels and secondary identifiers (slug, dates), which is what
+ * reserved for labels and secondary identifiers (domains, dates), which is what
  * makes the primary data stand out.
  */
 export function BrandsList({ rows }: { rows: BrandRow[] }) {
@@ -40,7 +41,7 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
                     <BrandAvatar name={b.name} theme={b.theme} />
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-foreground">{b.name}</div>
-                      <div className="truncate font-mono text-xs text-muted-foreground">{b.slug}</div>
+                      {!b.customDomain && <div className="truncate text-xs text-muted-foreground">Domain pending</div>}
                       {b.customDomain && (
                         <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                           <Globe className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -60,7 +61,7 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <Link
-                      href={`/admin/brands/${b.slug}`}
+                      href={`/admin/brands/${b.id}`}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
                     >
                       View Details
@@ -84,7 +85,7 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
                 <BrandAvatar name={b.name} theme={b.theme} />
                 <div className="min-w-0">
                   <div className="truncate font-semibold text-foreground">{b.name}</div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">{b.slug}</div>
+                  <div className="truncate text-xs text-muted-foreground">{b.customDomain ?? "Domain pending"}</div>
                 </div>
               </div>
               <BrandStatus status={b.status} />
@@ -108,7 +109,7 @@ export function BrandsList({ rows }: { rows: BrandRow[] }) {
             </dl>
 
             <Link
-              href={`/admin/brands/${b.slug}`}
+              href={`/admin/brands/${b.id}`}
               className="mt-3 flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-status-info text-sm font-semibold text-white hover:opacity-95"
             >
               View Details

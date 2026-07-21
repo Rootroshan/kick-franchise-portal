@@ -24,6 +24,7 @@ const PUBLIC_PATTERNS: RegExp[] = [
   // the cookie could be cleared.
   /^\/sign-out$/,
   /^\/api\/webhooks(\/.*)?$/,
+  /^\/api\/brand-logo(\/.*)?$/,
   /^\/manifest\.webmanifest$/,
   /^\/sw\.js$/,
   /^\/icons(\/.*)?$/,

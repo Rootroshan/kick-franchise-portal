@@ -16,6 +16,54 @@ const themeSchema = z.object({
   font: z.string().optional(),
 });
 
+export const supportedBrandFonts = ["Inter", "Arial", "Georgia", "System UI"] as const;
+
+export const portalDomainInputSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter a portal domain.")
+  .max(255)
+  .transform((raw) => {
+    let value = raw.toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+    value = (value.split(/[/?#]/)[0] ?? "").split(":")[0] ?? "";
+    return value.replace(/\.$/, "");
+  })
+  .refine((value) => value.startsWith("portal."), "The domain must begin with portal.")
+  .refine(
+    (value) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?){2,}$/i.test(value),
+    "Enter a valid portal hostname."
+  );
+
+export const createBrandSchema = z.object({
+  brandName: z.string().trim().min(2, "Brand name must be at least 2 characters.").max(100),
+  status: z.enum(["active", "draft"]),
+  portalDomain: portalDomainInputSchema,
+  branding: z.object({
+    logoReference: z.string().regex(/^brand-logo-temp\/[0-9a-f-]{36}$/).optional(),
+    primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Enter a six-digit hex colour."),
+    secondary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Enter a six-digit hex colour."),
+    font: z.enum(supportedBrandFonts),
+  }),
+  admin: z
+    .object({
+      sendInvitation: z.boolean(),
+      firstName: z.string().trim().max(100).optional(),
+      lastName: z.string().trim().max(100).optional(),
+      email: z.string().trim().toLowerCase().email("Enter a valid email address.").optional(),
+      personalMessage: z.string().trim().max(500).optional(),
+    })
+    .superRefine((admin, ctx) => {
+      if (!admin.sendInvitation) return;
+      if (!admin.firstName) ctx.addIssue({ code: "custom", path: ["firstName"], message: "Enter a first name." });
+      if (!admin.lastName) ctx.addIssue({ code: "custom", path: ["lastName"], message: "Enter a last name." });
+      if (!admin.email) ctx.addIssue({ code: "custom", path: ["email"], message: "Enter an email address." });
+    }),
+  confirmation: z.literal(true),
+  idempotencyKey: z.string().uuid(),
+});
+
+export const domainCheckSchema = z.object({ domain: portalDomainInputSchema });
+
 /**
  * Person-identity building blocks, reused across every place an admin
  * creates or invites a real account (franchisor admin, store manager/user,

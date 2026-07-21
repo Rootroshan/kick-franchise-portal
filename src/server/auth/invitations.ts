@@ -21,6 +21,7 @@ export type InvitationInput = {
   storeRole?: StoreRole | null;
   tenantId?: string | null;
   locationId?: string | null;
+  personalMessage?: string | null;
 };
 
 /**
@@ -32,7 +33,7 @@ export type InvitationInput = {
  * (deleted) rather than left to coexist — resending should not produce two
  * live links to the same intended account.
  */
-export async function createInvitation(ctx: RequestContext, input: InvitationInput): Promise<{ id: string }> {
+export async function createInvitation(ctx: RequestContext, input: InvitationInput): Promise<{ id: string; deliveryFailed: boolean }> {
   const email = input.email.trim().toLowerCase();
 
   const existingUser = await authPrisma.user.findUnique({ where: { email } });
@@ -70,12 +71,13 @@ export async function createInvitation(ctx: RequestContext, input: InvitationInp
     })
   );
 
-  await sendInvitationEmail(email, input.displayName, raw, input.role);
+  await sendInvitationEmail(email, input.displayName, raw, input.role, input.personalMessage);
 
-  return { id: invitation.id };
+  const delivered = await authPrisma.invitation.findUnique({ where: { id: invitation.id }, select: { status: true } });
+  return { id: invitation.id, deliveryFailed: delivered?.status === "FAILED" };
 }
 
-async function sendInvitationEmail(email: string, name: string, rawToken: string, role: Role): Promise<void> {
+async function sendInvitationEmail(email: string, name: string, rawToken: string, role: Role, personalMessage?: string | null): Promise<void> {
   const base = getEnv().APP_BASE_DOMAIN;
   const link = `https://${base}/accept-invite?token=${rawToken}`;
   const roleLabel = role === "FRANCHISOR_ADMIN" ? "Franchisor Admin" : role === "FRANCHISEE_USER" ? "team member" : "administrator";
@@ -86,6 +88,7 @@ async function sendInvitationEmail(email: string, name: string, rawToken: string
       subject: "You've been invited to Kick Franchise Portal",
       html: `<p>Hi ${escapeHtml(name)},</p>
 <p>You've been invited to join Kick Franchise Portal as a ${escapeHtml(roleLabel)}.</p>
+${personalMessage ? `<p>${escapeHtml(personalMessage)}</p>` : ""}
 <p><a href="${link}">Accept your invitation</a> to create your account and set a password.</p>
 <p>This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`,
     });

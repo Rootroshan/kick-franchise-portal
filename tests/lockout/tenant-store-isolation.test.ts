@@ -59,7 +59,7 @@ describe("Cross-tenant and cross-store isolation", () => {
   });
 
   it("requireStoreAccess rejects a franchisee whose Membership.locationId points at a different store", async () => {
-    const { tenant, location: storeA } = await seedTenantWithLocation();
+    const { tenant, location: storeA, domain } = await seedTenantWithLocation();
     const storeB = await withTenant(kickCtx(), (tx) => tx.location.create({ data: { tenantId: tenant.id, name: "Store B" } }));
 
     await withTenant(kickCtx(), (tx) =>
@@ -69,7 +69,7 @@ describe("Cross-tenant and cross-store isolation", () => {
     );
 
     authState.userId = "franchisee-1";
-    authState.host = `${tenant.slug}.portal.kickmedia.test`;
+    authState.host = domain.hostname;
 
     // Same tenant, wrong store: must be rejected even though the membership
     // and target share a brand.
@@ -79,7 +79,7 @@ describe("Cross-tenant and cross-store isolation", () => {
   });
 
   it("requireStoreAccess with requireManager rejects a plain store USER but allows a MANAGER", async () => {
-    const { tenant, location: store } = await seedTenantWithLocation();
+    const { tenant, location: store, domain } = await seedTenantWithLocation();
 
     await withTenant(kickCtx(), (tx) =>
       tx.membership.create({
@@ -92,7 +92,7 @@ describe("Cross-tenant and cross-store isolation", () => {
       })
     );
 
-    authState.host = `${tenant.slug}.portal.kickmedia.test`;
+    authState.host = domain.hostname;
 
     authState.userId = "store-user-1";
     await expect(requireStoreAccess(store.id, { requireManager: true })()).rejects.toMatchObject({ status: 403 });
