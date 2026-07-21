@@ -87,7 +87,7 @@ export function TaskForm({
               {allSelected ? "Clear all" : "Select all"}
             </button>
           </div>
-          <div className="max-h-56 overflow-y-auto rounded-md border border-border">
+          <div className="max-h-56 scrollbar-hide overflow-y-auto rounded-md border border-border">
             {filteredStores.length === 0 ? (
               <p className="p-3 text-sm text-muted-foreground">No stores match.</p>
             ) : (

@@ -84,7 +84,7 @@ export default async function PaymentsPage({
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
+          <div className="hidden scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">

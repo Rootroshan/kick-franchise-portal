@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 export function BrandsList({ rows }: { rows: BrandRow[] }) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
+      <div className="hidden scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card shadow-sm md:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b-2 border-border bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-foreground/70">

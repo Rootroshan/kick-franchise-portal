@@ -24,7 +24,7 @@ export function FilterTabs({ tabs, paramKey = "status" }: { tabs: FilterTab[]; p
   };
 
   return (
-    <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border pb-px" role="tablist" aria-label="Filter by status">
+    <div className="mb-3 flex gap-1 scrollbar-hide overflow-x-auto border-b border-border pb-px" role="tablist" aria-label="Filter by status">
       {tabs.map((t) => {
         const isActive = active === t.value;
         return (

@@ -33,7 +33,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
       <PageHeader title="Settings" description="Manage your account and brand preferences." />
 
       {/* Tabs */}
-      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border" role="tablist">
+      <div className="mb-5 flex gap-1 scrollbar-hide overflow-x-auto border-b border-border" role="tablist">
         {TABS.map((t) => (
           <Link
             key={t.value}

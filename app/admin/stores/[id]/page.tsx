@@ -67,7 +67,7 @@ export default async function StoreDetailPage({ params }: { params: { id: string
           {store.members.length === 0 ? (
             <EmptyState title="No team members" description="Nobody is assigned to this store yet." icon={Users} />
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <div className="scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card">
               <table className="w-full min-w-[360px] text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -95,7 +95,7 @@ export default async function StoreDetailPage({ params }: { params: { id: string
           {store.recentOrders.length === 0 ? (
             <EmptyState title="No orders yet" description="This store has not placed any orders." icon={ShoppingCart} />
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <div className="scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card">
               <table className="w-full min-w-[360px] text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">

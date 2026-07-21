@@ -118,7 +118,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
       {/* ---- BRAND OVERVIEW (horizontal scroll) ---- */}
       <section>
         <SectionTitle title="Brand Overview" sub="All brands with key metrics and quick access." href="/admin/tenants" hrefLabel="View all brands" />
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-3 scrollbar-hide overflow-x-auto pb-2">
           {data.brands.length === 0 && <Card className="text-sm text-muted-foreground">No brands yet.</Card>}
           {data.brands.map((b) => (
             <Card key={b.id} className="w-56 shrink-0">
@@ -219,7 +219,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <SectionTitle title="Recent Orders" sub="Latest order placements across all brands." href="/admin/orders" />
-          <div className="-mx-4 overflow-x-auto">
+          <div className="-mx-4 scrollbar-hide overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">

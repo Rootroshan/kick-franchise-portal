@@ -47,7 +47,7 @@ export function DataTable<Row>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card">
+    <div className="scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card">
       <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">

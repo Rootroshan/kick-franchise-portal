@@ -95,7 +95,7 @@ export default async function RolesPage() {
       </div>
 
       <h2 className="mb-2 text-sm font-semibold">Capabilities</h2>
-      <div className="mb-6 overflow-x-auto rounded-xl border border-border bg-card">
+      <div className="mb-6 scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">

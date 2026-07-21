@@ -77,7 +77,7 @@ export function EditBrandDialog({ brand }: { brand: BrandFormValues }) {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-lg scrollbar-hide overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2 className="text-base font-semibold">Edit brand details</h2>
               <button onClick={() => setOpen(false)} className="rounded p-1 hover:bg-muted" aria-label="Close">

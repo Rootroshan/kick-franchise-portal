@@ -46,7 +46,7 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
+          <div className="hidden scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card md:block">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">

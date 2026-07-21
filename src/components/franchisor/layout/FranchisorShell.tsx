@@ -85,7 +85,7 @@ export function FranchisorShell({
           <div className="truncate text-[11px] text-white/50">Franchisor Portal</div>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 scrollbar-hide overflow-y-auto py-2">
         <NavList onNavigate={onNavigate} />
       </div>
       <button

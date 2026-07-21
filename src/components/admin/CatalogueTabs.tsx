@@ -30,7 +30,7 @@ export function CatalogueTabs({ activeView }: { activeView?: string }) {
   };
 
   return (
-    <nav className="mb-4 flex items-center gap-1 overflow-x-auto border-b border-border" aria-label="Catalogue sections">
+    <nav className="mb-4 flex items-center gap-1 scrollbar-hide overflow-x-auto border-b border-border" aria-label="Catalogue sections">
       {TABS.map((t) => (
         <Link
           key={t.href}

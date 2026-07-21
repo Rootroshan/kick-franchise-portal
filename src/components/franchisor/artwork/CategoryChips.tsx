@@ -20,7 +20,7 @@ export function CategoryChips({
 }) {
   return (
     <nav aria-label="Artwork categories">
-      <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+      <ul className="flex gap-1.5 scrollbar-hide overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
         {categories.map((c) => {
           const value = c.name === "all" ? "" : c.name;
           const isActive = active === (c.name === "all" ? "all" : c.name) || (c.name === "all" && (active === "" || active === "all"));

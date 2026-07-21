@@ -110,7 +110,7 @@ export function OrderingRulesPanel({
       </form>
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="overflow-x-auto">
+      <div className="scrollbar-hide overflow-x-auto">
         <table className="w-full min-w-[600px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-muted-foreground">

@@ -33,7 +33,7 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
 
 function DialogContent({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("max-h-[85vh] overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg", className)} {...props}>
+    <div className={cn("max-h-[85vh] scrollbar-hide overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg", className)} {...props}>
       {children}
     </div>
   );

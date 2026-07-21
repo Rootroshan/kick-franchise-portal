@@ -40,7 +40,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
         <EmptyState title="No tasks found" description={q.search || q.status ? "Try different filters." : "Create your first task for your stores."} />
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
+          <div className="hidden scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card md:block">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">

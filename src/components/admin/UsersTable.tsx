@@ -90,7 +90,7 @@ export function UsersTable({
       )}
 
       {/* Desktop table */}
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
+      <div className="hidden scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card md:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -227,7 +227,7 @@ type MenuPick = "view" | "edit" | "access" | "reset" | "delete" | "toggle";
  * Row action menu.
  *
  * Rendered through a portal to document.body: the table is inside an
- * `overflow-x-auto` container, which clips any absolutely-positioned child, so
+ * `scrollbar-hide overflow-x-auto` container, which clips any absolutely-positioned child, so
  * a menu on the last row was cut off.
  *
  * Positioning uses Floating UI rather than hand-rolled maths:
@@ -374,7 +374,7 @@ function Dialog({ title, children, onClose }: { title: string; children: React.R
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-md scrollbar-hide overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl">
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold">{title}</h2>
           <button onClick={onClose} className="rounded p-1 hover:bg-muted" aria-label="Close">

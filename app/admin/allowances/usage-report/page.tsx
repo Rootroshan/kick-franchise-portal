@@ -17,7 +17,7 @@ export default async function AllowanceUsageReportPage() {
         <CardHeader>
           <CardTitle>Usage</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="scrollbar-hide overflow-x-auto">
           <table className="w-full min-w-[800px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-muted-foreground">

@@ -50,7 +50,7 @@ export default async function AllowanceDetailPage({ params }: { params: { id: st
       {a.ledger.length === 0 ? (
         <EmptyState title="No ledger entries" description="This allowance has no recorded movements yet." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <div className="scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full min-w-[520px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">

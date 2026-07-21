@@ -163,6 +163,13 @@ html,
 body {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  /* The document itself should never scroll sideways — any horizontal
+     scrolling belongs to a specific container (a table, a tab strip) that
+     opts in with overflow-x-auto. This only guards the page edge; it does
+     not touch overflow-y, so vertical scroll is untouched. An oversized
+     child that would otherwise blow out the viewport gets clipped here
+     instead of producing a page-wide horizontal scrollbar. */
+  overflow-x: hidden;
 }
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
