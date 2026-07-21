@@ -103,7 +103,6 @@ export async function BrandedLoginShell({
             {tenant.name.charAt(0).toUpperCase()}
           </span>
         )}
-        <span className="text-sm font-semibold text-muted-foreground">{tenant.name}</span>
       </div>
 
       <RoleLoginForm role={role} heading={heading} description={description} brandName={tenant.name} />
