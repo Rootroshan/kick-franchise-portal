@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { requireRole } from "@/server/modules/identity/guard";
+import { requireTenantRole } from "@/server/modules/identity/guard";
 import { getAcknowledgementReport } from "@/server/modules/announcements/service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export default async function AnnouncementReportPage({ params }: { params: { id: string } }) {
-  const ctx = await requireRole("FRANCHISOR_ADMIN")();
-  const report = await getAcknowledgementReport(ctx, params.id);
+  const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
+  const report = await getAcknowledgementReport(ctx, params.id, ctx.tenantId);
 
   return (
     <div className="flex flex-col gap-6">

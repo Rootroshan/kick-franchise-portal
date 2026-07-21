@@ -38,8 +38,10 @@ export async function listFranchisorAnnouncements(ctx: RequestContext, tenantId:
       ...(q.raw.requiresAck === "true" ? { requiresAck: true } : {}),
     };
 
-    const orderBy =
-      q.sort === "title" ? { title: q.direction } : q.sort === "publishAt" ? { publishAt: q.direction } : [{ isPinned: "desc" as const }, { createdAt: q.direction }];
+    // Pinned always sorts first, even when sorting by title/publishAt — was
+    // previously dropped on any non-default sort.
+    const secondarySort = q.sort === "title" ? { title: q.direction } : q.sort === "publishAt" ? { publishAt: q.direction } : { createdAt: q.direction };
+    const orderBy = [{ isPinned: "desc" as const }, secondarySort];
 
     const [items, total, activeStores, statusGroups] = await Promise.all([
       tx.announcement.findMany({ where, orderBy, skip: (q.page - 1) * q.limit, take: q.limit, include: { _count: { select: { acks: true } } } }),

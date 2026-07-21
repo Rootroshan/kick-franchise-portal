@@ -1,6 +1,7 @@
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
+import { sendPushToLocationMembers } from "../../../../worker/push/send";
 import { HttpError } from "@/server/modules/identity/errors";
 import type { z } from "zod";
 import type { createAnnouncementSchema, updateAnnouncementSchema } from "./schemas";
@@ -52,6 +53,18 @@ export async function createAnnouncement(ctx: RequestContext, tenantId: string, 
       entityId: announcement.id,
     }).catch(() => {
       // Never fail the publish because the inbox fan-out failed.
+    });
+
+    // Push, with per-recipient email fallback — same call the scheduled-
+    // publish cron job makes (worker/jobs/announcements.ts). Immediate
+    // publish previously only fired the in-app inbox notification above;
+    // a "publish now" announcement got no push at all.
+    await sendPushToLocationMembers(tenantId, {
+      title: "New announcement",
+      body: announcement.title,
+      url: `/announcements/${announcement.id}`,
+    }).catch(() => {
+      // Never fail the publish because push delivery failed.
     });
   }
 
@@ -140,9 +153,16 @@ export async function acknowledgeAnnouncement(ctx: RequestContext, announcementI
 }
 
 /** Per-location acknowledgement report for admins. */
-export async function getAcknowledgementReport(ctx: RequestContext, announcementId: string) {
+/**
+ * `tenantId` is required for FRANCHISOR_ADMIN (pinned to their own brand —
+ * never trust a wider lookup for that role) and omitted for KICK_ADMIN, who
+ * may legitimately pull the report for any tenant's announcement. Explicit
+ * app-layer check either way, matching getFranchisorAnnouncement's
+ * convention rather than relying solely on the RLS session policy.
+ */
+export async function getAcknowledgementReport(ctx: RequestContext, announcementId: string, tenantId?: string) {
   return withTenant(ctx, async (tx) => {
-    const announcement = await tx.announcement.findUnique({ where: { id: announcementId } });
+    const announcement = await tx.announcement.findFirst({ where: { id: announcementId, ...(tenantId ? { tenantId } : {}) } });
     if (!announcement) throw new HttpError(404, "Announcement not found");
 
     const [acks, locations] = await Promise.all([

@@ -28,7 +28,10 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
       ...(q.brand ? { tenant: { slug: q.brand } } : {}),
     };
 
-    const orderBy =
+    // Pinned always sorts first, regardless of which column the operator
+    // chose to sort by — matching the franchisor list and franchisee feed,
+    // neither of which drop pinned-first when a non-default sort is picked.
+    const secondarySort =
       q.sort === "title"
         ? { title: q.direction }
         : q.sort === "status"
@@ -36,6 +39,7 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
         : q.sort === "publishAt"
         ? { publishAt: q.direction }
         : { createdAt: q.direction };
+    const orderBy = [{ isPinned: "desc" as const }, secondarySort];
 
     const [items, total] = await Promise.all([
       tx.announcement.findMany({
