@@ -4,8 +4,13 @@ import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 export default function ForgotPasswordPage({
   searchParams,
 }: {
-  searchParams: { token?: string };
+  searchParams: { token?: string; login?: string };
 }) {
+  // Which login route sent the user here, so the form can send them back to
+  // the correct one instead of always defaulting to the KICK_ADMIN /sign-in.
+  const backTo =
+    searchParams.login === "admin" ? "/admin-login" : searchParams.login === "store" ? "/store-login" : "/sign-in";
+
   return (
     <div className="flex min-h-screen flex-col bg-app-bg">
       <header className="flex items-center px-4 py-5 sm:px-8">
@@ -18,7 +23,7 @@ export default function ForgotPasswordPage({
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center px-4 pb-16">
-        <ForgotPasswordForm token={searchParams.token} />
+        <ForgotPasswordForm token={searchParams.token} backTo={backTo} />
       </main>
     </div>
   );

@@ -9,7 +9,7 @@ export function AcceptInviteForm({ token }: { token?: string }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string; loginPath?: string } | null>(null);
   const [pending, setPending] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -112,7 +112,7 @@ export function AcceptInviteForm({ token }: { token?: string }) {
 
       {done && (
         <a
-          href="/sign-in"
+          href={result?.loginPath ?? "/sign-in"}
           className="mt-5 flex min-h-11 w-full items-center justify-center rounded-md border border-border text-sm font-semibold hover:bg-muted"
         >
           Go to sign in

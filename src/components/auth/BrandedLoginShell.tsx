@@ -1,33 +1,33 @@
-import { headers } from "next/headers";
 import Image from "next/image";
 import { AlertTriangle, Clock } from "lucide-react";
 import { resolveTenantFromHost, diagnoseUnresolvedHost } from "@/server/modules/identity/tenantResolution";
 import { parseTenantTheme } from "@/lib/theme";
-import { PortalLoginForm } from "@/components/auth/PortalLoginForm";
-
-// Branding depends on the request Host, so this can never be prerendered.
-export const dynamic = "force-dynamic";
+import { RoleLoginForm } from "@/components/auth/RoleLoginForm";
+import type { PortalRole } from "@/server/auth/loginValidation";
 
 /**
- * Shared brand portal login.
+ * Shared rendering for the two role-locked brand portal logins
+ * (/admin-login, /store-login).
  *
- * One page serves every franchise brand. The tenant is resolved from the Host
- * header — a verified custom domain — so nothing about the
- * brand is hard-coded and a client cannot aim the page at another tenant.
+ * The tenant is resolved from the Host header — a verified custom domain —
+ * so nothing about the brand is hard-coded and a client cannot aim the page
+ * at another tenant. `role` is fixed by the calling page, never selectable.
  *
  * Unknown hosts, unverified domains and inactive tenants all resolve to null
  * and render a notice rather than a login form: offering a form for a brand
- * that does not exist would invite credential stuffing against it. The
- * message differs by WHY it failed (diagnoseUnresolvedHost) purely for
- * clarity to whoever is looking at the domain — it never grants access; the
- * access decision is entirely resolveTenantFromHost's null/non-null result.
+ * that does not exist would invite credential stuffing against it.
  */
-export default async function PortalLoginPage() {
-  // x-kick-host first: the middleware rewrites the custom domain root to this
-  // page and forwards the ORIGINAL host there. Reading `host` alone would see
-  // the rewritten request and fail to resolve the tenant.
-  const hdrs = await headers();
-  const host = hdrs.get("x-kick-host") || hdrs.get("host") || "";
+export async function BrandedLoginShell({
+  host,
+  role,
+  heading,
+  description,
+}: {
+  host: string;
+  role: PortalRole;
+  heading: string;
+  description: string;
+}) {
   const tenant = await resolveTenantFromHost(host);
 
   if (!tenant) {
@@ -106,7 +106,7 @@ export default async function PortalLoginPage() {
         <span className="text-sm font-semibold text-muted-foreground">{tenant.name}</span>
       </div>
 
-      <PortalLoginForm brandName={tenant.name} />
+      <RoleLoginForm role={role} heading={heading} description={description} brandName={tenant.name} />
 
       <p className="mt-8 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} {tenant.name}. Powered by KICK Media Group.

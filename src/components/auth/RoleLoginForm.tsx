@@ -3,23 +3,32 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
-import { RoleSelector } from "@/components/auth/RoleSelector";
-import { checkPortalLoginAction } from "@/app/sign-in/actions";
+import { checkRoleLoginAction } from "@/app/sign-in/actions";
 import type { PortalRole } from "@/server/auth/loginValidation";
 
 /**
- * Brand portal sign-in.
+ * Brand portal sign-in, locked to one role.
  *
- * Two steps on submit:
- *  1. checkPortalLoginAction verifies the credentials AND that this user may
- *     enter this tenant in the selected role, so a rejection renders inline.
+ * `role` is a prop set by the server page for its own fixed route — never a
+ * user choice. Two steps on submit, same as the old combined login:
+ *  1. checkRoleLoginAction verifies the credentials AND that this user holds
+ *     `role` on this tenant, so a mismatch renders inline ("wrong door").
  *  2. Only then does NextAuth issue a session.
  *
  * The destination comes back from the server (derived from the verified
  * Membership role) — the client never chooses where it lands.
  */
-export function PortalLoginForm({ brandName }: { brandName: string }) {
-  const [role, setRole] = useState<PortalRole>("FRANCHISEE_USER");
+export function RoleLoginForm({
+  role,
+  heading,
+  description,
+  brandName,
+}: {
+  role: PortalRole;
+  heading: string;
+  description: string;
+  brandName: string;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +46,7 @@ export function PortalLoginForm({ brandName }: { brandName: string }) {
 
     setPending(true);
     try {
-      const check = await checkPortalLoginAction({ email: email.trim(), password, role });
+      const check = await checkRoleLoginAction({ email: email.trim(), password, role });
       if (!check.ok) {
         setError(check.message);
         setPending(false);
@@ -62,10 +71,8 @@ export function PortalLoginForm({ brandName }: { brandName: string }) {
 
   return (
     <div className="w-full max-w-[460px] rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-9">
-      <h1 className="text-2xl font-semibold tracking-tight">Sign in to {brandName}</h1>
-      <p className="mb-6 mt-1 text-sm text-muted-foreground">Choose how you are signing in.</p>
-
-      <RoleSelector value={role} onChange={setRole} disabled={pending} />
+      <h1 className="text-2xl font-semibold tracking-tight">{heading}</h1>
+      <p className="mb-6 mt-1 text-sm text-muted-foreground">{description}</p>
 
       <form onSubmit={submit} noValidate>
         <label htmlFor="email" className="text-sm font-medium">
@@ -120,7 +127,7 @@ export function PortalLoginForm({ brandName }: { brandName: string }) {
             Remember me
           </label>
           <a
-            href="/forgot-password"
+            href={role === "FRANCHISOR_ADMIN" ? "/forgot-password?login=admin" : "/forgot-password?login=store"}
             className="text-sm font-medium hover:underline"
             style={{ color: "var(--tenant-primary, #2563eb)" }}
           >
@@ -148,6 +155,8 @@ export function PortalLoginForm({ brandName }: { brandName: string }) {
           {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
+
+      <p className="sr-only">{brandName}</p>
     </div>
   );
 }

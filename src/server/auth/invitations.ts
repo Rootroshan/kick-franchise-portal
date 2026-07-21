@@ -132,7 +132,14 @@ export async function resendInvitation(ctx: RequestContext, invitationId: string
   await sendInvitationEmail(invitation.email, invitation.displayName, raw, invitation.role);
 }
 
-export type AcceptOutcome = { ok: true; userId: string } | { ok: false; message: string };
+export type AcceptOutcome = { ok: true; userId: string; loginPath: string } | { ok: false; message: string };
+
+/** Where an accepted invitation's "go sign in" link should point, by role. Never the KICK_ADMIN /sign-in for a tenant role. */
+function loginPathForRole(role: Role): string {
+  if (role === "FRANCHISOR_ADMIN") return "/admin-login";
+  if (role === "FRANCHISEE_USER") return "/store-login";
+  return "/sign-in";
+}
 
 /**
  * Consumes an invitation and creates the User + Membership together. Single
@@ -195,7 +202,7 @@ export async function acceptInvitation(rawToken: string, password: string): Prom
 
   await authPrisma.invitation.update({ where: { id: invitation.id }, data: { status: "ACCEPTED", acceptedAt: new Date() } });
 
-  return { ok: true, userId: user.id };
+  return { ok: true, userId: user.id, loginPath: loginPathForRole(invitation.role) };
 }
 
 export type InvitationRow = {

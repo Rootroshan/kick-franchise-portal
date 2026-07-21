@@ -46,6 +46,11 @@ export type LoginErrorCode =
  * "No membership for this tenant" and "wrong password" both surface as the
  * same credentials error: distinguishing them would confirm that an address
  * exists on ANOTHER brand, which leaks the customer list across tenants.
+ *
+ * WRONG_PORTAL is the one exception: the caller has ALREADY proven they hold
+ * valid credentials for an account with a membership on this exact tenant —
+ * there is nothing left to leak by naming which portal they should use
+ * instead, and a clear "wrong door" message is more useful than a generic one.
  */
 const MESSAGES: Record<LoginErrorCode, string> = {
   UNKNOWN_DOMAIN: "This portal address is not recognised. Check the web address and try again.",
@@ -55,8 +60,15 @@ const MESSAGES: Record<LoginErrorCode, string> = {
   INACTIVE_STORE: "Your assigned store is not active. Contact your brand administrator.",
 };
 
-function deny(code: LoginErrorCode): LoginOutcome {
-  return { ok: false, code, message: MESSAGES[code] };
+/** Role-specific "wrong door" message for a CONFIRMED membership on this tenant, wrong role for this route. */
+function wrongPortalMessage(selectedRole: PortalRole): string {
+  return selectedRole === "FRANCHISOR_ADMIN"
+    ? "This account does not have Franchise Admin access."
+    : "This account does not have Store User access.";
+}
+
+function deny(code: LoginErrorCode, message?: string): LoginOutcome {
+  return { ok: false, code, message: message ?? MESSAGES[code] };
 }
 
 /**
@@ -91,7 +103,7 @@ export async function validatePortalLogin(
   if (!membership) return deny("INVALID_CREDENTIALS");
 
   // The selected portal must match the granted role. Never the other way round.
-  if (membership.role !== selectedRole) return deny("WRONG_PORTAL");
+  if (membership.role !== selectedRole) return deny("WRONG_PORTAL", wrongPortalMessage(selectedRole));
 
   if (membership.role === "FRANCHISEE_USER") {
     if (!membership.locationId || !membership.location) return deny("NO_STORE");

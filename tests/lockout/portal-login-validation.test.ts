@@ -75,7 +75,29 @@ describe("Portal login validation", () => {
     // The selector must not be able to elevate.
     const res = await validatePortalLogin("u-franchisee", "portal.brand-a.com", "FRANCHISOR_ADMIN");
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.code).toBe("WRONG_PORTAL");
+    if (!res.ok) {
+      expect(res.code).toBe("WRONG_PORTAL");
+      // /admin-login's specific "wrong door" message — safe to be specific
+      // here because credentials + a membership on THIS tenant are already
+      // confirmed; there's nothing left to leak by naming the right door.
+      expect(res.message).toBe("This account does not have Franchise Admin access.");
+    }
+  });
+
+  it("rejects a franchisor who picked the Store User portal", async () => {
+    const { tenant } = await seedPortal();
+    await withTenant(kickCtx(), (tx) =>
+      tx.membership.create({
+        data: { clerkUserId: "u-franchisor-2", tenantId: tenant.id, role: "FRANCHISOR_ADMIN" },
+      })
+    );
+
+    const res = await validatePortalLogin("u-franchisor-2", "portal.brand-a.com", "FRANCHISEE_USER");
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe("WRONG_PORTAL");
+      expect(res.message).toBe("This account does not have Store User access.");
+    }
   });
 
   it("rejects a user from another brand without revealing they exist", async () => {

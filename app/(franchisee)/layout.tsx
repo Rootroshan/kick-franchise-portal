@@ -14,8 +14,9 @@ export default async function FranchiseeLayout({ children }: { children: React.R
       // 401 = not signed in. 404 = signed in but no tenant resolves for this
       // host / no membership yet (e.g. a freshly-signed-up user on the apex,
       // before a KICK_ADMIN/brand membership is granted). Both should land on
-      // sign-in rather than a bare 404 — a redirect never grants access.
-      if (err.status === 401 || err.status === 404) redirect("/sign-in");
+      // the Store User login for this tenant, never the KICK_ADMIN /sign-in —
+      // a redirect never grants access.
+      if (err.status === 401 || err.status === 404) redirect("/store-login");
       throw err; // 403 = genuinely forbidden membership — surface it, don't loop
     }
     throw err;

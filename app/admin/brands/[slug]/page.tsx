@@ -13,6 +13,7 @@ import { PageHeader, KPIStatCard, StatusBadge } from "@/components/admin/kit";
 import { StoresPanel } from "@/components/admin/StoresPanel";
 import { DomainsPanel } from "@/components/admin/DomainsPanel";
 import { FranchisorAdminsPanel } from "@/components/admin/FranchisorAdminsPanel";
+import { PortalLoginLinksPanel } from "@/components/admin/PortalLoginLinksPanel";
 import { listFranchisorAdmins, listFranchisorAdminInvitations } from "./adminActions";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,10 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
   // A brand's overall domain status is its most-advanced domain, or "Not
   // configured" when none exists yet — matches the badge shown in Brands list.
   const domainStatus = domains.length === 0 ? null : domains.some((d) => d.status === "VERIFIED") ? "VERIFIED" : domains[0]!.status;
+  // Same preference for which hostname the login links are built from: a
+  // verified domain over a pending one, since that's the one franchisees are
+  // actually told to use.
+  const primaryHostname = domains.find((d) => d.status === "VERIFIED")?.hostname ?? domains[0]?.hostname ?? null;
 
   return (
     <div>
@@ -149,6 +154,10 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-3 text-sm font-semibold">Custom Domains</h2>
             <DomainsPanel tenantId={brand.id} initialDomains={domains} />
+          </div>
+
+          <div className="mt-6">
+            <PortalLoginLinksPanel hostname={primaryHostname} />
           </div>
 
           <h2 className="mb-2 mt-6 text-sm font-semibold">Theme &amp; Branding</h2>

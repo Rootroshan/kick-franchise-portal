@@ -11,18 +11,23 @@ import {
 } from "@/server/auth/loginValidation";
 
 /**
- * Pre-flight authorisation check for the brand portals.
+ * Pre-flight authorisation check for the role-locked brand portal logins
+ * (/admin-login, /store-login).
  *
  * The client calls this BEFORE NextAuth's signIn() so a rejection (wrong
- * portal, no store, wrong brand) can be shown inline instead of bouncing
+ * role, no store, wrong brand) can be shown inline instead of bouncing
  * through an error redirect. It never issues a session — signIn() still does
  * that, and the middleware plus requestContext.ts still gate every request, so
  * this cannot become the only line of defence.
  *
+ * `role` comes from the SERVER PAGE that called this action — /admin-login
+ * always passes FRANCHISOR_ADMIN, /store-login always passes FRANCHISEE_USER.
+ * It is never read from a client-editable field; there is no role selector.
+ *
  * The host is read from the request headers server-side; a client-supplied
  * tenant or redirect is never consulted.
  */
-export async function checkPortalLoginAction(input: {
+export async function checkRoleLoginAction(input: {
   email: string;
   password: string;
   role: string;

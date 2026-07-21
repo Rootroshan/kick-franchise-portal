@@ -9,7 +9,7 @@ import { requestResetAction, resetPasswordAction } from "@/app/forgot-password/a
  *   - no token  → ask for the email, send a reset link
  *   - token     → collect the new password and consume the token
  */
-export function ForgotPasswordForm({ token }: { token?: string }) {
+export function ForgotPasswordForm({ token, backTo = "/sign-in" }: { token?: string; backTo?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -137,7 +137,7 @@ export function ForgotPasswordForm({ token }: { token?: string }) {
       )}
 
       <a
-        href="/sign-in"
+        href={backTo}
         className="mt-5 flex items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" />

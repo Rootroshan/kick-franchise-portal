@@ -2,7 +2,7 @@
 
 import { acceptInvitation } from "@/server/auth/invitations";
 
-export type ActionResult = { ok: boolean; message: string };
+export type ActionResult = { ok: boolean; message: string; loginPath?: string };
 
 /** Consumes the invitation token and creates the account. */
 export async function acceptInvitationAction(token: string, password: string): Promise<ActionResult> {
@@ -10,6 +10,6 @@ export async function acceptInvitationAction(token: string, password: string): P
 
   const result = await acceptInvitation(token, password);
   return result.ok
-    ? { ok: true, message: "Account created. You can now sign in." }
+    ? { ok: true, message: "Account created. You can now sign in.", loginPath: result.loginPath }
     : { ok: false, message: result.message };
 }

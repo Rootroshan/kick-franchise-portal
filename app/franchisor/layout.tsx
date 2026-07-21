@@ -9,7 +9,8 @@ import { PushOptInBanner } from "@/components/franchisor/PushOptInBanner";
 /**
  * Franchisor portal gate + shell. FRANCHISOR_ADMIN only; other roles are
  * redirected to their own home (KICK_ADMIN → /admin, else → /). Unauthenticated
- * requests throw HttpError(401) from getRequestContext → redirected to sign-in.
+ * requests throw HttpError(401) from getRequestContext → redirected to the
+ * Franchise Admin login for this tenant, never the KICK_ADMIN /sign-in.
  */
 export default async function FranchisorLayout({ children }: { children: React.ReactNode }) {
   let ctx;
@@ -17,7 +18,7 @@ export default async function FranchisorLayout({ children }: { children: React.R
     ctx = await getRequestContext();
   } catch (err) {
     if (err instanceof HttpError) {
-      redirect(err.status === 401 ? "/sign-in" : "/");
+      redirect(err.status === 401 ? "/admin-login" : "/");
     }
     throw err;
   }

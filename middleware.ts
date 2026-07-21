@@ -15,9 +15,11 @@ const PUBLIC_PATTERNS: RegExp[] = [
   // Where an invited franchisor/store user sets their password to create
   // their account. No session exists yet, same reasoning as forgot-password.
   /^\/accept-invite$/,
-  // Brand portal login. Public by necessity — it is where an unauthenticated
-  // tenant user starts, and it resolves its own tenant from the Host header.
-  /^\/portal-login$/,
+  // Brand portal logins. Public by necessity — these are where an
+  // unauthenticated tenant user starts, and each resolves its own tenant from
+  // the Host header. Separate routes per role: no combined login remains.
+  /^\/admin-login$/,
+  /^\/store-login$/,
   /^\/api\/auth(\/.*)?$/, // NextAuth's own callback/session/CSRF endpoints
   // Must be public: it clears the session cookie and redirects to sign-in.
   // Gating it behind auth would bounce an already-expired session away before
@@ -100,17 +102,25 @@ export default devBypassEnabled
         }
 
         // Tenant portal: REWRITE rather than redirect, so the branded login
-        // renders AT the domain root. A redirect would put /portal-login in
+        // renders AT the domain root. A redirect would put /store-login in
         // the address bar; a rewrite keeps the URL as
         // https://portal.brand.com/ while serving that page's content.
         //
+        // /admin-login and /store-login already ARE the destination — no
+        // further rewrite, or the intended role would be lost. Any other path
+        // (most commonly "/") defaults to /store-login: store users vastly
+        // outnumber franchise admins, who are expected to bookmark
+        // /admin-login directly rather than land there by accident.
+        const alreadyAtLoginRoute = req.nextUrl.pathname === "/admin-login" || req.nextUrl.pathname === "/store-login";
+        const targetPath = alreadyAtLoginRoute ? req.nextUrl.pathname : "/store-login";
+
         // req.nextUrl.clone() inherits nextUrl.origin, which on Vercel is the
         // CANONICAL DEPLOYMENT URL, not the incoming host — the same trap the
         // redirect branch above avoids. Left as-is, the rewrite target pointed
         // at kick-franchise-portal.vercel.app instead of the tenant's own
         // domain, which Next treats as a cross-host proxy rather than an
         // internal rewrite and silently failed to resolve the tenant.
-        const rewriteUrl = new URL(`/portal-login${req.nextUrl.search}`, `${proto}://${host}`);
+        const rewriteUrl = new URL(`${targetPath}${req.nextUrl.search}`, `${proto}://${host}`);
         rewriteUrl.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
 
         // The rewritten REQUEST must carry the original host: the page resolves
