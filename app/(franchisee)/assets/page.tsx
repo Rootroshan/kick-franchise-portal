@@ -12,6 +12,9 @@ export default async function AssetsPage() {
     type: a.type,
     category: a.category,
     mime: a.mime,
+    sizeBytes: a.sizeBytes,
+    version: a.version,
+    updatedAt: a.updatedAt,
   }));
 
   return (

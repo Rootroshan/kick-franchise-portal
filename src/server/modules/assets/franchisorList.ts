@@ -2,6 +2,7 @@ import { AssetStatus } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { HttpError } from "@/server/modules/identity/errors";
 import type { AdminListQuery } from "@/lib/adminQuery";
+import { resolveUploaderNames } from "./admin";
 
 /** Tenant-scoped artwork list for the franchisor Artwork Hub. No commerce. */
 export type AssetRow = {
@@ -14,6 +15,7 @@ export type AssetRow = {
   sizeBytes: number;
   version: number;
   createdAt: Date;
+  uploaderName: string | null;
 };
 
 export type AssetListResult = { rows: AssetRow[]; total: number; categories: Array<{ name: string; count: number }>; totalCount: number };
@@ -41,12 +43,25 @@ export async function listFranchisorAssets(ctx: RequestContext, tenantId: string
       tx.asset.count({ where: { tenantId } }),
     ]);
 
+    const uploaderNames = await resolveUploaderNames(tx, items.map((a) => a.createdBy));
+
     const categories = byCategory
       .map((c) => ({ name: c.category ?? "Other", count: c._count }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
     return {
-      rows: items.map((a) => ({ id: a.id, name: a.name, type: a.type, category: a.category, status: a.status, mime: a.mime, sizeBytes: a.sizeBytes, version: a.version, createdAt: a.createdAt })),
+      rows: items.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        category: a.category,
+        status: a.status,
+        mime: a.mime,
+        sizeBytes: a.sizeBytes,
+        version: a.version,
+        createdAt: a.createdAt,
+        uploaderName: uploaderNames.get(a.createdBy) ?? null,
+      })),
       total,
       categories,
       totalCount,
@@ -65,12 +80,26 @@ export type AssetDetail = {
   version: number;
   createdAt: Date;
   createdBy: string;
+  uploaderName: string | null;
 };
 
 export async function getFranchisorAsset(ctx: RequestContext, tenantId: string, id: string): Promise<AssetDetail> {
   return withTenant(ctx, async (tx) => {
     const a = await tx.asset.findFirst({ where: { id, tenantId } });
     if (!a) throw new HttpError(404, "Asset not found");
-    return { id: a.id, name: a.name, type: a.type, category: a.category, status: a.status, mime: a.mime, sizeBytes: a.sizeBytes, version: a.version, createdAt: a.createdAt, createdBy: a.createdBy };
+    const uploaderNames = await resolveUploaderNames(tx, [a.createdBy]);
+    return {
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      category: a.category,
+      status: a.status,
+      mime: a.mime,
+      sizeBytes: a.sizeBytes,
+      version: a.version,
+      createdAt: a.createdAt,
+      createdBy: a.createdBy,
+      uploaderName: uploaderNames.get(a.createdBy) ?? null,
+    };
   });
 }

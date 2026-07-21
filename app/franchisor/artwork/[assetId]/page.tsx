@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileImage, Download } from "lucide-react";
+import { ArrowLeft, FileImage } from "lucide-react";
 import { requireTenantRole } from "@/server/modules/identity/guard";
 import { getFranchisorAsset } from "@/server/modules/assets/franchisorList";
 import { HttpError } from "@/server/modules/identity/errors";
 import { formatBytes } from "@/lib/utils";
 import { PageHeader, StatusBadge } from "@/components/admin/kit";
+import { DownloadAssetButton } from "@/components/admin/artwork/DownloadAssetButton";
+import { ArtworkRowMenu } from "@/components/admin/artwork/ArtworkRowMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,16 @@ export default async function AssetDetailPage({ params }: { params: { assetId: s
         <ArrowLeft className="h-4 w-4" /> Back to Artwork Hub
       </Link>
 
-      <PageHeader title={a.name} description={`${a.category ?? "Other"} · uploaded ${a.createdAt.toLocaleDateString()}`} secondaryAction={<StatusBadge status={a.status} />} />
+      <PageHeader
+        title={a.name}
+        description={`${a.category ?? "Other"} · uploaded ${a.createdAt.toLocaleDateString()}`}
+        secondaryAction={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={a.status} />
+            <ArtworkRowMenu asset={a} basePath="/franchisor/artwork" />
+          </div>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -36,12 +47,10 @@ export default async function AssetDetailPage({ params }: { params: { assetId: s
         </div>
 
         <div className="flex flex-col gap-4">
-          <a
-            href={`/api/franchisor/assets/${a.id}/download`}
-            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            <Download className="h-4 w-4" /> Download
-          </a>
+          <DownloadAssetButton
+            assetId={a.id}
+            className="justify-center rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          />
 
           <div className="rounded-xl border border-border bg-card p-4">
             <h2 className="mb-2 text-sm font-semibold">File Details</h2>
@@ -52,11 +61,12 @@ export default async function AssetDetailPage({ params }: { params: { assetId: s
               <Row label="Size" value={formatBytes(a.sizeBytes)} />
               <Row label="Version" value={`v${a.version}`} />
               <Row label="Status" value={a.status} />
+              <Row label="Uploaded By" value={a.uploaderName ?? "—"} />
             </dl>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Downloads use a secure link that expires within 5 minutes. Artwork is managed and versioned by Kick Media.
+            Downloads use a secure link that expires within 5 minutes.
           </p>
         </div>
       </div>

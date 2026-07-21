@@ -1,19 +1,39 @@
-import Link from "next/link";
-import { Plus, Pin, CheckSquare, Eye, Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
 import { requireTenantRole } from "@/server/modules/identity/guard";
 import { listFranchisorAnnouncements } from "@/server/modules/announcements/franchisorList";
+import { getAnnouncementRecentActivity, getFeaturedAckAnnouncement, getAnnouncementKpis } from "@/server/modules/announcements/admin";
+import { getAcknowledgementSummary } from "@/server/modules/announcements/service";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
-import { PageHeader, StatusBadge, Pagination, PrimaryButtonLink, EmptyState } from "@/components/admin/kit";
+import { PageHeader, Pagination, PrimaryButtonLink, EmptyState } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
+import { SortSelect } from "@/components/admin/SortSelect";
 import { FilterTabs } from "@/components/franchisor/shared/FilterTabs";
+import { AnnouncementListCard } from "@/components/franchisor/announcements/AnnouncementListCard";
+import { OverviewCard } from "@/components/admin/announcements/OverviewCard";
+import { AcknowledgementSummaryCard } from "@/components/admin/announcements/AcknowledgementSummaryCard";
+import { PublishCalendarCard } from "@/components/admin/announcements/PublishCalendarCard";
+import { RecentActivityCard } from "@/components/admin/announcements/RecentActivityCard";
 
 export const dynamic = "force-dynamic";
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest First", sort: "createdAt", direction: "desc" as const },
+  { value: "oldest", label: "Oldest First", sort: "createdAt", direction: "asc" as const },
+  { value: "title-asc", label: "Title A–Z", sort: "title", direction: "asc" as const },
+  { value: "publish-desc", label: "Publish Date", sort: "publishAt", direction: "desc" as const },
+];
 
 export default async function AnnouncementsPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
   const q = parseListQuery(searchParams);
-  const { rows, total, counts } = await listFranchisorAnnouncements(ctx, ctx.tenantId, q);
+  const [{ rows, total, counts }, kpis, activity, featuredAck] = await Promise.all([
+    listFranchisorAnnouncements(ctx, ctx.tenantId, q),
+    getAnnouncementKpis(ctx),
+    getAnnouncementRecentActivity(ctx, ctx.tenantId, 8),
+    getFeaturedAckAnnouncement(ctx, ctx.tenantId),
+  ]);
   const pages = pageCount(total, q.limit);
+  const ackSummary = featuredAck ? await getAcknowledgementSummary(ctx, ctx.tenantId, featuredAck.id) : null;
 
   const tabs = [
     { value: "", label: "All", count: counts.all },
@@ -35,96 +55,48 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
         }
       />
 
-      <FilterTabs tabs={tabs} />
-      <ListToolbar searchPlaceholder="Search announcements…" />
+      <div className="grid min-w-0 gap-6 xl:grid-cols-3">
+        <section className="flex min-w-0 flex-col gap-4 xl:col-span-2">
+          <OverviewCard kpis={kpis} />
 
-      {rows.length === 0 ? (
-        <EmptyState
-          title="No announcements found"
-          description={q.search || q.status ? "Try different filters." : "Publish your first brand announcement."}
-        />
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card md:block">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2.5 font-medium">Announcement</th>
-                  <th className="px-3 py-2.5 font-medium">Status</th>
-                  <th className="px-3 py-2.5 font-medium">Target</th>
-                  <th className="px-3 py-2.5 font-medium">Acknowledged</th>
-                  <th className="px-3 py-2.5 font-medium">Published / Scheduled</th>
-                  <th className="px-3 py-2.5 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((a) => (
-                  <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1.5">
-                        {a.isPinned && <Pin className="h-3.5 w-3.5 shrink-0 text-status-warning" aria-label="Pinned" />}
-                        <div>
-                          <div className="font-medium">{a.title}</div>
-                          <div className="max-w-md truncate text-xs text-muted-foreground">{a.excerpt}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5"><StatusBadge status={a.status} /></td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{a.targetStores} stores</td>
-                    <td className="px-3 py-2.5">
-                      {a.requiresAck ? (
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full rounded-full bg-status-success" style={{ width: `${a.readPercent}%` }} />
-                          </div>
-                          <span className="text-xs tabular-nums">{a.ackCount}/{a.targetStores} ({a.readPercent}%)</span>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><CheckSquare className="h-3 w-3" /> Not required</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">{a.publishAt ? a.publishAt.toLocaleDateString() : "—"}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1">
-                        <Link href={`/franchisor/announcements/${a.id}`} className="rounded p-1.5 hover:bg-muted" aria-label="View"><Eye className="h-4 w-4" /></Link>
-                        <Link href={`/franchisor/announcements/${a.id}/edit`} className="rounded p-1.5 hover:bg-muted" aria-label="Edit"><Pencil className="h-4 w-4" /></Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <FilterTabs tabs={tabs} />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <ListToolbar searchPlaceholder="Search announcements…" />
+            </div>
+            <SortSelect options={SORT_OPTIONS} />
           </div>
 
-          {/* Mobile record cards */}
-          <ul className="flex flex-col gap-2 md:hidden">
-            {rows.map((a) => (
-              <li key={a.id}>
-                <Link href={`/franchisor/announcements/${a.id}`} className="block rounded-xl border border-border bg-card p-3">
-                  <div className="mb-1 flex items-start justify-between gap-2">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      {a.isPinned && <Pin className="h-3.5 w-3.5 text-status-warning" aria-label="Pinned" />}
-                      {a.title}
-                    </span>
-                    <StatusBadge status={a.status} />
-                  </div>
-                  <p className="mb-2 line-clamp-2 text-xs text-muted-foreground">{a.excerpt}</p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{a.targetStores} stores</span>
-                    {a.requiresAck && <span className="font-medium text-status-success">{a.readPercent}% read</span>}
-                    <span>{a.publishAt ? a.publishAt.toLocaleDateString() : "—"}</span>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+          {rows.length === 0 ? (
+            <EmptyState
+              title="No announcements found"
+              description={q.search || q.status ? "Try different filters." : "Publish your first brand announcement."}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {rows.map((a) => (
+                <AnnouncementListCard key={a.id} a={a} />
+              ))}
+            </div>
+          )}
 
-      <div className="flex items-center justify-between">
-        <p className="mt-3 text-xs text-muted-foreground">{total} announcement{total === 1 ? "" : "s"}</p>
-        <Pagination page={q.page} pageCount={pages} makeHref={(p) => buildHref("/franchisor/announcements", q.raw, { page: p })} />
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">{total} announcement{total === 1 ? "" : "s"}</p>
+            <Pagination page={q.page} pageCount={pages} makeHref={(p) => buildHref("/franchisor/announcements", q.raw, { page: p })} />
+          </div>
+        </section>
+
+        <aside className="flex min-w-0 flex-col gap-4">
+          {ackSummary && featuredAck && (
+            <AcknowledgementSummaryCard
+              summary={ackSummary}
+              announcementTitle={featuredAck.title}
+              reportHref={`/franchisor/announcements/${featuredAck.id}/report`}
+            />
+          )}
+          <PublishCalendarCard ctx={ctx} tenantId={ctx.tenantId} raw={q.raw} />
+          <RecentActivityCard activity={activity} />
+        </aside>
       </div>
     </div>
   );

@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireTenantRole } from "@/server/modules/identity/guard";
+import { requireRole, requireTenantRole } from "@/server/modules/identity/guard";
 import { withTenant } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
-import { createAnnouncement, updateAnnouncement } from "@/server/modules/announcements/service";
+import { createAnnouncement, updateAnnouncement, getAllAnnouncementAcknowledgementUsers } from "@/server/modules/announcements/service";
 import { HttpError } from "@/server/modules/identity/errors";
+import { csvCell } from "@/lib/csv";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required").max(300),
@@ -116,4 +117,37 @@ export async function deleteDraftAction(id: string) {
   });
   revalidatePath("/franchisor/announcements");
   redirect("/franchisor/announcements");
+}
+
+/**
+ * Exports the full per-user acknowledgement breakdown for one announcement as
+ * a CSV download. Returns base64-encoded CSV data that the client decodes and
+ * triggers as a download — same shape as bulkExportAuditLogsAction.
+ * FRANCHISOR_ADMIN (own tenant) or KICK_ADMIN (any tenant, tenantId passed in).
+ */
+export async function bulkExportAcknowledgementCsvAction(announcementId: string, tenantId?: string): Promise<{ ok: boolean; message: string; csv?: string }> {
+  const ctx = await requireRole("KICK_ADMIN", "FRANCHISOR_ADMIN")();
+  const scopedTenantId = ctx.role === "FRANCHISOR_ADMIN" ? ctx.tenantId : tenantId;
+  if (!scopedTenantId) return { ok: false, message: "A tenant is required." };
+
+  const rows = await getAllAnnouncementAcknowledgementUsers(ctx, announcementId, scopedTenantId);
+  if (!rows.length) return { ok: false, message: "No users to export." };
+
+  const headers = ["Name", "Email", "Store", "Status", "Acknowledged At"];
+  const csvRows = [
+    headers.join(","),
+    ...rows.map((r) =>
+      [
+        csvCell(r.displayName),
+        csvCell(r.email),
+        csvCell(r.locationName),
+        r.pending ? "Pending" : "Acknowledged",
+        r.acknowledgedAt ? r.acknowledgedAt.toISOString() : "",
+      ].join(",")
+    ),
+  ];
+
+  const csv = csvRows.join("\n");
+  const base64 = Buffer.from(csv, "utf-8").toString("base64");
+  return { ok: true, message: `${rows.length} users exported.`, csv: base64 };
 }

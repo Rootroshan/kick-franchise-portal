@@ -8,6 +8,33 @@ import { AnnouncementStatus } from "@prisma/client";
 
 export type ActionResult = { ok: boolean; message: string };
 
+export async function toggleAnnouncementPinAction(id: string, pinned: boolean): Promise<ActionResult> {
+  const ctx = await requireRole("KICK_ADMIN")();
+  try {
+    await withTenant(ctx, async (tx) => {
+      const ann = await tx.announcement.findUnique({ where: { id } });
+      if (!ann) throw new HttpError(404, "Announcement not found");
+      await tx.announcement.update({ where: { id }, data: { isPinned: pinned } });
+      await tx.auditLog.create({
+        data: {
+          tenantId: ann.tenantId,
+          actorId: ctx.userId,
+          role: ctx.role,
+          action: "announcement.update",
+          entity: "Announcement",
+          entityId: id,
+          before: { isPinned: ann.isPinned },
+          after: { isPinned: pinned },
+        },
+      });
+    });
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not update." };
+  }
+  revalidatePath("/admin/announcements");
+  return { ok: true, message: pinned ? "Pinned." : "Unpinned." };
+}
+
 export async function setAnnouncementStatusAction(id: string, status: AnnouncementStatus): Promise<ActionResult> {
   const ctx = await requireRole("KICK_ADMIN")();
   try {

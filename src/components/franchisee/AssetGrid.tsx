@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Image as ImageIcon, Download } from "lucide-react";
+import { Image as ImageIcon, FileText, FileArchive, Video, Download } from "lucide-react";
+import { formatBytes, formatDate } from "@/lib/utils";
 
 type AssetItem = {
   id: string;
@@ -13,7 +14,18 @@ type AssetItem = {
   type: string;
   category: string | null;
   mime: string;
+  sizeBytes: number;
+  version: number;
+  updatedAt: Date;
 };
+
+function FileTypeIcon({ mime }: { mime: string }) {
+  if (mime.startsWith("image/")) return <ImageIcon className="h-8 w-8 text-muted-foreground" />;
+  if (mime === "application/pdf") return <FileText className="h-8 w-8 text-muted-foreground" />;
+  if (mime === "application/zip") return <FileArchive className="h-8 w-8 text-muted-foreground" />;
+  if (mime.startsWith("video/")) return <Video className="h-8 w-8 text-muted-foreground" />;
+  return <FileText className="h-8 w-8 text-muted-foreground" />;
+}
 
 export function AssetGrid({ assets }: { assets: AssetItem[] }) {
   const [search, setSearch] = useState("");
@@ -75,14 +87,19 @@ export function AssetGrid({ assets }: { assets: AssetItem[] }) {
         {filtered.map((asset) => (
           <Card key={asset.id}>
             <CardContent className="flex aspect-square items-center justify-center p-3">
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+              <FileTypeIcon mime={asset.mime} />
             </CardContent>
-            <CardFooter className="flex flex-col items-start gap-2 p-3 pt-0">
+            <CardFooter className="flex flex-col items-start gap-1 p-3 pt-0">
               <p className="line-clamp-2 text-xs font-medium">{asset.name}</p>
+              <div className="flex w-full items-center justify-between text-[11px] text-muted-foreground">
+                <span>v{asset.version}</span>
+                <span>{formatBytes(asset.sizeBytes)}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Updated {formatDate(asset.updatedAt)}</p>
               <Button
                 size="sm"
                 variant="secondary"
-                className="w-full"
+                className="mt-1 w-full"
                 onClick={() => download(asset.id, asset.name)}
                 disabled={downloadingId === asset.id}
               >

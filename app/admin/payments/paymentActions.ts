@@ -2,6 +2,7 @@
 
 import { requireRole } from "@/server/modules/identity/guard";
 import { withTenant } from "@/server/db/withTenant";
+import { csvCell } from "@/lib/csv";
 
 export type BulkExportResult = { ok: boolean; message: string; csv?: string };
 
@@ -46,8 +47,8 @@ export async function bulkExportPaymentsAction(orderIds: string[]): Promise<Bulk
       [
         o.id,
         o.status,
-        `"${o.tenant.name.replace(/"/g, '""')}"`,
-        `"${o.location.name.replace(/"/g, '""')}"`,
+        csvCell(o.tenant.name),
+        csvCell(o.location.name),
         (o.subtotalCents / 100).toFixed(2),
         (o.allowanceAppliedCents / 100).toFixed(2),
         (o.cardChargedCents / 100).toFixed(2),

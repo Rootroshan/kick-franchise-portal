@@ -74,7 +74,12 @@ export default async function AnnouncementDetailPage({ params }: { params: { id:
 
           {a.requiresAck && (
             <div className="rounded-xl border border-border bg-card p-4">
-              <h2 className="mb-2 text-sm font-semibold">Acknowledgement Breakdown</h2>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">Acknowledgement Breakdown</h2>
+                <Link href={`/franchisor/announcements/${a.id}/report`} className="text-xs font-medium text-status-info hover:underline">
+                  Full report →
+                </Link>
+              </div>
               <ul className="flex flex-col gap-1.5 text-sm">
                 {a.acknowledged.map((k, i) => (
                   <li key={`ack-${i}`} className="flex items-center gap-2">

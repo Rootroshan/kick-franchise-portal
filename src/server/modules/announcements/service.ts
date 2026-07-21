@@ -3,7 +3,7 @@ import { writeAuditLog } from "@/server/modules/identity/audit";
 import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
 import { sendPushToLocationMembers } from "../../../../worker/push/send";
 import { HttpError } from "@/server/modules/identity/errors";
-import type { z } from "zod";
+import { z } from "zod";
 import type { createAnnouncementSchema, updateAnnouncementSchema } from "./schemas";
 
 /** KICK_ADMIN and FRANCHISOR_ADMIN may create/manage announcements for their tenant. */
@@ -144,11 +144,22 @@ export async function acknowledgeAnnouncement(ctx: RequestContext, announcementI
       throw new HttpError(404, "Announcement not found");
     }
 
-    return tx.announcementAck.upsert({
+    const ack = await tx.announcementAck.upsert({
       where: { announcementId_clerkUserId: { announcementId, clerkUserId: ctx.userId } },
       create: { announcementId, clerkUserId: ctx.userId, locationId: ctx.locationId },
       update: {}, // already acknowledged — idempotent no-op
     });
+
+    await writeAuditLog(tx, {
+      tenantId: announcement.tenantId,
+      actorId: ctx.userId,
+      role: ctx.role,
+      action: "announcement.acknowledge",
+      entity: "Announcement",
+      entityId: announcementId,
+    });
+
+    return ack;
   });
 }
 
@@ -172,6 +183,12 @@ export async function getAcknowledgementReport(ctx: RequestContext, announcement
 
     const ackedLocationIds = new Set(acks.map((a) => a.locationId).filter(Boolean));
     return {
+      // Additive: lets a caller that omitted tenantId (KICK_ADMIN) resolve it
+      // from the announcement itself, e.g. to call the per-user report query
+      // below, which requires an explicit tenantId. title likewise saves the
+      // report page a second lookup just to render its own heading.
+      tenantId: announcement.tenantId,
+      title: announcement.title,
       totalLocations: locations.length,
       acknowledgedCount: ackedLocationIds.size,
       locations: locations.map((l) => ({
@@ -180,5 +197,171 @@ export async function getAcknowledgementReport(ctx: RequestContext, announcement
         acknowledged: ackedLocationIds.has(l.id),
       })),
     };
+  });
+}
+
+/** Store filter options for the per-user report table — every active location in the tenant. */
+export async function getAnnouncementLocationOptions(ctx: RequestContext, tenantId: string): Promise<Array<{ value: string; label: string }>> {
+  return withTenant(ctx, async (tx) => {
+    const locations = await tx.location.findMany({ where: { tenantId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+    return locations.map((l) => ({ value: l.id, label: l.name }));
+  });
+}
+
+export type AcknowledgementSummary = {
+  totalEligibleUsers: number;
+  acknowledgedUsers: number;
+  pendingUsers: number;
+  percent: number;
+};
+
+/**
+ * Brand-wide (announcementId omitted) or single-announcement acknowledgement
+ * aggregate. "Eligible" = FRANCHISEE_USER memberships in the tenant — there is
+ * no per-user/per-store targeting on Announcement, so the eligible population
+ * is always every store user in the tenant (see schema note: acks are
+ * recorded per-location for reporting only, not for targeting).
+ */
+export async function getAcknowledgementSummary(
+  ctx: RequestContext,
+  tenantId?: string,
+  announcementId?: string
+): Promise<AcknowledgementSummary> {
+  return withTenant(ctx, async (tx) => {
+    let scopedTenantId = tenantId;
+    if (announcementId) {
+      const announcement = await tx.announcement.findFirst({ where: { id: announcementId, ...(tenantId ? { tenantId } : {}) } });
+      if (!announcement) throw new HttpError(404, "Announcement not found");
+      scopedTenantId = announcement.tenantId;
+    }
+
+    const [totalEligibleUsers, acknowledgedUsers] = await Promise.all([
+      tx.membership.count({ where: { role: "FRANCHISEE_USER", ...(scopedTenantId ? { tenantId: scopedTenantId } : {}) } }),
+      announcementId
+        ? tx.announcementAck.count({ where: { announcementId } })
+        : tx.membership.count({ where: { role: "FRANCHISEE_USER", ...(scopedTenantId ? { tenantId: scopedTenantId } : {}) } }),
+    ]);
+
+    const pendingUsers = Math.max(0, totalEligibleUsers - acknowledgedUsers);
+    const percent = totalEligibleUsers === 0 ? 0 : Math.round((acknowledgedUsers / totalEligibleUsers) * 100);
+    return { totalEligibleUsers, acknowledgedUsers, pendingUsers, percent };
+  });
+}
+
+export type AnnouncementAckUserRow = {
+  clerkUserId: string;
+  displayName: string | null;
+  email: string | null;
+  locationId: string | null;
+  locationName: string | null;
+  acknowledgedAt: Date | null;
+  pending: boolean;
+};
+
+const ackUsersOptsSchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  locationId: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
+});
+export type AckUsersOpts = z.input<typeof ackUsersOptsSchema>;
+
+/**
+ * Per-user acknowledgement rows for one announcement: every FRANCHISEE_USER
+ * membership in the tenant, marked acknowledged/pending. tenantId ownership
+ * is re-verified via findFirst({id, tenantId}) exactly like
+ * getAcknowledgementReport, before any membership data is touched.
+ */
+export async function getAnnouncementAcknowledgementUsers(
+  ctx: RequestContext,
+  announcementId: string,
+  tenantId: string,
+  opts: AckUsersOpts
+): Promise<{ rows: AnnouncementAckUserRow[]; total: number }> {
+  const q = ackUsersOptsSchema.parse(opts);
+
+  return withTenant(ctx, async (tx) => {
+    const announcement = await tx.announcement.findFirst({ where: { id: announcementId, tenantId } });
+    if (!announcement) throw new HttpError(404, "Announcement not found");
+
+    const where = {
+      role: "FRANCHISEE_USER" as const,
+      tenantId,
+      ...(q.locationId ? { locationId: q.locationId } : {}),
+      ...(q.search
+        ? {
+            OR: [
+              { displayName: { contains: q.search, mode: "insensitive" as const } },
+              { email: { contains: q.search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [members, total, acks] = await Promise.all([
+      tx.membership.findMany({
+        where,
+        select: { clerkUserId: true, displayName: true, email: true, location: { select: { id: true, name: true } } },
+        orderBy: { displayName: "asc" },
+        skip: (q.page - 1) * q.limit,
+        take: q.limit,
+      }),
+      tx.membership.count({ where }),
+      tx.announcementAck.findMany({ where: { announcementId }, select: { clerkUserId: true, acknowledgedAt: true } }),
+    ]);
+
+    const ackByUser = new Map(acks.map((a) => [a.clerkUserId, a.acknowledgedAt]));
+    const rows: AnnouncementAckUserRow[] = members.map((m) => {
+      const acknowledgedAt = ackByUser.get(m.clerkUserId) ?? null;
+      return {
+        clerkUserId: m.clerkUserId,
+        displayName: m.displayName,
+        email: m.email,
+        locationId: m.location?.id ?? null,
+        locationName: m.location?.name ?? null,
+        acknowledgedAt,
+        pending: acknowledgedAt === null,
+      };
+    });
+
+    return { rows, total };
+  });
+}
+
+/**
+ * Full (unpaginated) per-user rows for CSV export — same tenant-ownership
+ * check as the paginated query, just no skip/take.
+ */
+export async function getAllAnnouncementAcknowledgementUsers(
+  ctx: RequestContext,
+  announcementId: string,
+  tenantId: string
+): Promise<AnnouncementAckUserRow[]> {
+  return withTenant(ctx, async (tx) => {
+    const announcement = await tx.announcement.findFirst({ where: { id: announcementId, tenantId } });
+    if (!announcement) throw new HttpError(404, "Announcement not found");
+
+    const [members, acks] = await Promise.all([
+      tx.membership.findMany({
+        where: { role: "FRANCHISEE_USER", tenantId },
+        select: { clerkUserId: true, displayName: true, email: true, location: { select: { id: true, name: true } } },
+        orderBy: { displayName: "asc" },
+      }),
+      tx.announcementAck.findMany({ where: { announcementId }, select: { clerkUserId: true, acknowledgedAt: true } }),
+    ]);
+
+    const ackByUser = new Map(acks.map((a) => [a.clerkUserId, a.acknowledgedAt]));
+    return members.map((m) => {
+      const acknowledgedAt = ackByUser.get(m.clerkUserId) ?? null;
+      return {
+        clerkUserId: m.clerkUserId,
+        displayName: m.displayName,
+        email: m.email,
+        locationId: m.location?.id ?? null,
+        locationName: m.location?.name ?? null,
+        acknowledgedAt,
+        pending: acknowledgedAt === null,
+      };
+    });
   });
 }

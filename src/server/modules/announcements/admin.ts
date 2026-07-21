@@ -1,16 +1,19 @@
 import { AnnouncementStatus } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import type { AdminListQuery } from "@/lib/adminQuery";
+import { z } from "zod";
 
 export type AnnouncementRow = {
   id: string;
   title: string;
+  excerpt: string;
   status: string;
   isPinned: boolean;
   requiresAck: boolean;
   brandName: string;
   brandSlug: string;
   publishAt: Date | null;
+  expiresAt: Date | null;
   ackCount: number;
   createdAt: Date;
 };
@@ -55,12 +58,14 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
     const rows: AnnouncementRow[] = items.map((a) => ({
       id: a.id,
       title: a.title,
+      excerpt: a.body.slice(0, 140),
       status: a.status,
       isPinned: a.isPinned,
       requiresAck: a.requiresAck,
       brandName: a.tenant.name,
       brandSlug: a.tenant.slug,
       publishAt: a.publishAt,
+      expiresAt: a.expiresAt,
       ackCount: a._count.acks,
       createdAt: a.createdAt,
     }));
@@ -69,16 +74,134 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
   });
 }
 
-export type AnnouncementKpis = { total: number; published: number; scheduled: number; drafts: number };
+export type AnnouncementKpis = { total: number; published: number; scheduled: number; drafts: number; expired: number };
 
 export async function getAnnouncementKpis(ctx: RequestContext): Promise<AnnouncementKpis> {
   return withTenant(ctx, async (tx) => {
-    const [total, published, scheduled, drafts] = await Promise.all([
+    const [total, published, scheduled, drafts, expired] = await Promise.all([
       tx.announcement.count(),
       tx.announcement.count({ where: { status: AnnouncementStatus.PUBLISHED } }),
       tx.announcement.count({ where: { status: AnnouncementStatus.SCHEDULED } }),
       tx.announcement.count({ where: { status: AnnouncementStatus.DRAFT } }),
+      tx.announcement.count({ where: { status: AnnouncementStatus.EXPIRED } }),
     ]);
-    return { total, published, scheduled, drafts };
+    return { total, published, scheduled, drafts, expired };
+  });
+}
+
+export type PublishCalendarDay = { date: string; scheduledCount: number; publishedCount: number };
+
+const calendarArgsSchema = z.object({
+  tenantId: z.string().uuid().optional(),
+  year: z.coerce.number().int().min(2000).max(3000),
+  month: z.coerce.number().int().min(1).max(12), // 1-12
+});
+
+/**
+ * Publish-calendar data for one month: per-day counts of announcements
+ * SCHEDULED to publish that day, and announcements actually PUBLISHED that
+ * day (by publishAt). One findMany spanning the month, bucketed in memory —
+ * same pattern as the dashboard sales series (src/server/modules/dashboard/service.ts).
+ */
+export async function getAnnouncementPublishCalendar(
+  ctx: RequestContext,
+  tenantId: string | undefined,
+  year: number,
+  month: number
+): Promise<PublishCalendarDay[]> {
+  const args = calendarArgsSchema.parse({ tenantId, year, month });
+
+  return withTenant(ctx, async (tx) => {
+    const start = new Date(Date.UTC(args.year, args.month - 1, 1));
+    const end = new Date(Date.UTC(args.year, args.month, 1));
+
+    const items = await tx.announcement.findMany({
+      where: {
+        ...(args.tenantId ? { tenantId: args.tenantId } : {}),
+        publishAt: { gte: start, lt: end },
+        status: { in: [AnnouncementStatus.SCHEDULED, AnnouncementStatus.PUBLISHED, AnnouncementStatus.EXPIRED] },
+      },
+      select: { publishAt: true, status: true },
+    });
+
+    const byDay = new Map<string, { scheduledCount: number; publishedCount: number }>();
+    for (const item of items) {
+      if (!item.publishAt) continue;
+      const dateKey = item.publishAt.toISOString().slice(0, 10); // YYYY-MM-DD
+      const bucket = byDay.get(dateKey) ?? { scheduledCount: 0, publishedCount: 0 };
+      if (item.status === AnnouncementStatus.SCHEDULED) bucket.scheduledCount += 1;
+      else bucket.publishedCount += 1; // PUBLISHED or EXPIRED both "published" for calendar purposes
+      byDay.set(dateKey, bucket);
+    }
+
+    return Array.from(byDay.entries())
+      .map(([date, counts]) => ({ date, ...counts }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  });
+}
+
+export type AnnouncementActivityRow = {
+  id: string;
+  action: string;
+  label: string;
+  entityId: string | null;
+  actorId: string;
+  createdAt: Date;
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  "announcement.create": "created",
+  "announcement.update": "edited",
+  "announcement.status": "status changed",
+  "announcement.expire": "expired",
+  "announcement.duplicate": "duplicated",
+  "announcement.delete": "deleted",
+  "announcement.acknowledge": "acknowledged",
+  "announcement.report_view": "report viewed",
+};
+
+/**
+ * Recent Announcement-scoped activity for the dashboard rail, read from the
+ * existing AuditLog table (entity: "Announcement") — no new table.
+ * tenantId-scoped for FRANCHISOR_ADMIN, unscoped (cross-tenant) for KICK_ADMIN
+ * when tenantId is omitted.
+ */
+export async function getAnnouncementRecentActivity(ctx: RequestContext, tenantId?: string, limit = 10): Promise<AnnouncementActivityRow[]> {
+  const take = Math.min(50, Math.max(1, limit));
+  return withTenant(ctx, async (tx) => {
+    const rows = await tx.auditLog.findMany({
+      where: { entity: "Announcement", ...(tenantId ? { tenantId } : {}) },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: { id: true, action: true, entityId: true, actorId: true, createdAt: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      label: ACTION_LABELS[r.action] ?? r.action,
+      entityId: r.entityId,
+      actorId: r.actorId,
+      createdAt: r.createdAt,
+    }));
+  });
+}
+
+export type FeaturedAckAnnouncement = { id: string; title: string } | null;
+
+/**
+ * Most recently created requiresAck announcement — used to give the list
+ * page's Acknowledgement Summary rail card a real, well-defined
+ * announcementId (getAcknowledgementSummary has no meaningful brand-wide
+ * "acknowledged" figure without one; every requiresAck announcement has its
+ * own audience/ack set).
+ */
+export async function getFeaturedAckAnnouncement(ctx: RequestContext, tenantId?: string): Promise<FeaturedAckAnnouncement> {
+  return withTenant(ctx, async (tx) => {
+    const a = await tx.announcement.findFirst({
+      where: { requiresAck: true, ...(tenantId ? { tenantId } : {}) },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, title: true },
+    });
+    return a;
   });
 }

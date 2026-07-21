@@ -3,6 +3,7 @@
 import { requireRole } from "@/server/modules/identity/guard";
 import { withTenant } from "@/server/db/withTenant";
 import type { AuditRow } from "@/server/modules/identity/auditList";
+import { csvCell } from "@/lib/csv";
 
 export type BulkActionResult = { ok: boolean; message: string; partial?: boolean };
 
@@ -42,12 +43,12 @@ export async function bulkExportAuditLogsAction(ids: string[]): Promise<{ ok: bo
     ...rows.map((r) =>
       [
         r.id,
-        `"${(r.action ?? "").replace(/"/g, '""')}"`,
-        `"${(r.entity ?? "").replace(/"/g, '""')}"`,
+        csvCell(r.action),
+        csvCell(r.entity),
         r.entityId ?? "",
-        `"${(r.actorId ?? "").replace(/"/g, '""')}"`,
+        csvCell(r.actorId),
         r.role ?? "",
-        `"${(r.brandName ?? "Platform").replace(/"/g, '""')}"`,
+        csvCell(r.brandName ?? "Platform"),
         r.ip ?? "",
         r.createdAt.toISOString(),
       ].join(",")

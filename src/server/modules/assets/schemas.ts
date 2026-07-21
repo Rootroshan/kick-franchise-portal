@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const ASSET_CATEGORIES = ["Logo", "Signage", "Menu Board", "Campaign", "Template"] as const;
+
 export const createAssetUploadSchema = z.object({
   name: z.string().min(1).max(300),
   type: z.string().min(1).max(100),
@@ -8,6 +10,13 @@ export const createAssetUploadSchema = z.object({
   sizeBytes: z.number().int().positive(),
   storageKey: z.string().min(1),
   replacesId: z.string().uuid().nullable().optional(),
+  versionNotes: z.string().max(1000).nullable().optional(),
+  publishActive: z.boolean().optional(),
+});
+
+export const updateAssetMetadataSchema = z.object({
+  name: z.string().min(1).max(300).optional(),
+  category: z.string().max(100).nullable().optional(),
 });
 
 export const listAssetsQuerySchema = z.object({
