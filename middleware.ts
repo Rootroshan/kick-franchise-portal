@@ -75,6 +75,12 @@ export default devBypassEnabled
   : auth((req) => {
       const isProtected = !isPublicRoute(req);
       if (isProtected && !req.auth?.user?.id) {
+        // APIs must return a machine-readable auth failure. Rewriting them to
+        // the portal login page produces HTML with a misleading 200 response
+        // and lets clients mistake a rejected operation for success.
+        if (req.nextUrl.pathname.startsWith("/api/")) {
+          return NextResponse.json({ error: "Not authenticated", code: "UNAUTHENTICATED" }, { status: 401 });
+        }
         // Build from the Host header, NOT req.nextUrl.origin: on Vercel the
         // latter resolves to the canonical deployment URL, so a visitor on
         // portal.brand.com would be thrown onto the *.vercel.app host.
