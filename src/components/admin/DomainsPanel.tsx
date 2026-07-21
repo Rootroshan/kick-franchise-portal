@@ -139,9 +139,9 @@ export function DomainsPanel({ tenantId, initialDomains }: { tenantId: string; i
           const live = liveStatus[d.id];
           return (
             <li key={d.id} className="flex flex-col gap-2 rounded-md border border-border px-3 py-2 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{d.hostname}</span>
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="break-all font-medium">{d.hostname}</span>
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={STATUS_VARIANT[d.status]}>{d.status}</Badge>
                   {live && <Badge variant={LIVE_STATUS_VARIANT[live.status]}>{LIVE_STATUS_LABEL[live.status]}</Badge>}
                   {d.status !== "VERIFIED" && (
