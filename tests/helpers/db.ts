@@ -1,4 +1,5 @@
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
+import { authPrisma } from "@/server/db/authClient";
 
 /**
  * These are integration tests against a real local Postgres (`kick_test`),
@@ -24,8 +25,20 @@ export function franchiseeCtx(
   return { tenantId, role: "FRANCHISEE_USER", locationId, storeRole, userId };
 }
 
-/** Wipes all tenant-owned tables between tests. Runs as KICK_ADMIN via the privileged path (raw client, bypasses RLS via superuser DIRECT connection is NOT used here — deletes go through the app role, so KICK_ADMIN context is required). */
+/**
+ * Wipes all tenant-owned tables between tests. Runs as KICK_ADMIN via the
+ * privileged path (raw client, bypasses RLS via superuser DIRECT connection
+ * is NOT used here — deletes go through the app role, so KICK_ADMIN context
+ * is required) — EXCEPT AuditLog, which has no DELETE policy at all (it's
+ * deliberately append-only in production, see prisma/rls.sql). Under
+ * kick_app_test's RLS-enforced role, `tx.auditLog.deleteMany()` silently
+ * deletes 0 rows — no error, no thrown exception — so it has to go through
+ * authPrisma (the DIRECT_URL / schema-owner connection) instead, the same
+ * connection the app itself uses for the other deny-all-RLS tables (User,
+ * Account, Session, Invitation).
+ */
 export async function resetDatabase() {
+  await authPrisma.auditLog.deleteMany();
   await withTenant(kickCtx(), async (tx) => {
     // Platform-wide, no FK references — safe to clear first. Must be reset or
     // a row from one test leaks into the next and collides on the primary key.
@@ -48,7 +61,6 @@ export async function resetDatabase() {
     await tx.asset.deleteMany();
     await tx.announcementAck.deleteMany();
     await tx.announcement.deleteMany();
-    await tx.auditLog.deleteMany();
     await tx.pushSubscription.deleteMany();
     await tx.processedStripeEvent.deleteMany();
     await tx.customDomain.deleteMany();

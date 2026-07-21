@@ -56,12 +56,17 @@ export type AuditKpis = { total: number; last24h: number; distinctActors: number
 export async function getAuditKpis(ctx: RequestContext): Promise<AuditKpis> {
   return withTenant(ctx, async (tx) => {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const [total, last24h, actors] = await Promise.all([
+    // COUNT(DISTINCT ...) returns one row no matter how large the audit log
+    // gets — findMany({distinct}) had to read back one row per distinct
+    // actor just to take its length, an unbounded result set on a table that
+    // only grows. Runs through the same RLS-scoped `tx`, so tenant isolation
+    // is unchanged.
+    const [total, last24h, actorRows] = await Promise.all([
       tx.auditLog.count(),
       tx.auditLog.count({ where: { createdAt: { gte: dayAgo } } }),
-      tx.auditLog.findMany({ distinct: ["actorId"], select: { actorId: true } }),
+      tx.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(DISTINCT "actorId") AS count FROM "AuditLog"`,
     ]);
-    return { total, last24h, distinctActors: actors.length };
+    return { total, last24h, distinctActors: Number(actorRows[0]?.count ?? 0) };
   });
 }
 

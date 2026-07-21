@@ -100,6 +100,7 @@ export async function getDashboardData(ctx: RequestContext): Promise<DashboardDa
       failedOrders,
       overdueTasks,
       unverifiedDomains,
+      storeCountsByTenant,
     ] = await Promise.all([
       tx.tenant.findMany({ orderBy: { createdAt: "asc" } }),
       tx.location.count({ where: { status: "active" } }),
@@ -123,6 +124,10 @@ export async function getDashboardData(ctx: RequestContext): Promise<DashboardDa
       tx.order.count({ where: { status: "FAILED" } }),
       tx.taskAssignment.count({ where: { status: "OPEN", task: { dueAt: { lt: new Date() } } } }),
       tx.customDomain.count({ where: { status: { not: "VERIFIED" } } }),
+      // One grouped query for every tenant's store count, instead of one
+      // query per tenant — the latter was a real N+1 on the dashboard's
+      // highest-traffic page.
+      tx.location.groupBy({ by: ["tenantId"], _count: true }),
     ]);
 
     // ---- money rollups ----
@@ -151,8 +156,7 @@ export async function getDashboardData(ctx: RequestContext): Promise<DashboardDa
     }
     const usedByTenant = new Map<string, number>();
     for (const a of allowances) usedByTenant.set(a.tenantId, (usedByTenant.get(a.tenantId) ?? 0) + usedOf(a));
-    const storeCounts = new Map<string, number>();
-    for (const t of tenants) storeCounts.set(t.id, await tx.location.count({ where: { tenantId: t.id } }));
+    const storeCounts = new Map(storeCountsByTenant.map((s) => [s.tenantId, s._count]));
 
     const brands = tenants.map((t) => ({
       id: t.id,
@@ -166,15 +170,22 @@ export async function getDashboardData(ctx: RequestContext): Promise<DashboardDa
     }));
 
     // ---- sales series: last 6 months of revenue ----
-    const series: Array<{ label: string; cents: number }> = [];
-    for (let i = 5; i >= 0; i--) {
-      const r = monthRange(-i);
-      const monthOrders = await tx.order.aggregate({
-        _sum: { subtotalCents: true },
-        where: { status: { in: [...PAID_STATUSES] }, createdAt: { gte: r.start, lt: r.end } },
-      });
-      series.push({ label: r.start.toLocaleString("en-CA", { month: "short", timeZone: "UTC" }), cents: monthOrders._sum.subtotalCents ?? 0 });
-    }
+    // One query spanning the whole 6-month window, bucketed in memory —
+    // replaces 6 sequential per-month aggregates (each an extra round trip).
+    const seriesRanges = Array.from({ length: 6 }, (_, idx) => monthRange(-(5 - idx)));
+    const seriesOrders = await tx.order.findMany({
+      where: {
+        status: { in: [...PAID_STATUSES] },
+        createdAt: { gte: seriesRanges[0]!.start, lt: seriesRanges[5]!.end },
+      },
+      select: { subtotalCents: true, createdAt: true },
+    });
+    const series: Array<{ label: string; cents: number }> = seriesRanges.map((r) => ({
+      label: r.start.toLocaleString("en-CA", { month: "short", timeZone: "UTC" }),
+      cents: seriesOrders
+        .filter((o) => o.createdAt >= r.start && o.createdAt < r.end)
+        .reduce((s, o) => s + o.subtotalCents, 0),
+    }));
 
     // ---- alerts ----
     const lowCount = lowAllowances.filter((a) => balanceOf(a) < 5000).length;

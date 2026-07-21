@@ -154,6 +154,7 @@ export function IntegrationSetup({
               disabled={pending}
               className="inline-flex min-h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted disabled:opacity-60"
             >
+              {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Test connection
             </button>
           </div>
