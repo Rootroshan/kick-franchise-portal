@@ -148,11 +148,12 @@ export async function updateStoreAction(storeId: string, slug: string, input: un
 }
 
 /**
- * Deletes a store.
+ * Deletes a store unconditionally.
  *
- * Location cascades to orders, allowances and onboarding progress, so a store
- * holding any of them is refused — that is operational and financial history,
- * and deactivating preserves it while achieving the same practical result.
+ * Location cascades to orders, allowances, task assignments and onboarding
+ * progress at the DB level; memberships are detached (locationId set null,
+ * the account itself survives) rather than deleted. The audit log records
+ * what was attached at delete time, since those rows are gone afterward.
  */
 export async function deleteStoreAction(storeId: string, slug: string): Promise<ActionResult> {
   const ctx = await requireRole("KICK_ADMIN")();
@@ -168,20 +169,7 @@ export async function deleteStoreAction(storeId: string, slug: string): Promise<
         tx.allowance.count({ where: { locationId: storeId } }),
       ]);
 
-      const blockers = [
-        orders && `${orders} order${orders === 1 ? "" : "s"}`,
-        members && `${members} member${members === 1 ? "" : "s"}`,
-        allowances && `${allowances} allowance${allowances === 1 ? "" : "s"}`,
-      ].filter(Boolean);
-
-      if (blockers.length) {
-        throw new HttpError(
-          409,
-          `This store still has ${blockers.join(", ")}. Deactivate it instead — deleting would destroy records that must be retained.`
-        );
-      }
-
-      // Audit before the delete: afterwards the row it references is gone.
+      // Audit before the delete: afterwards the rows it references are gone.
       await writeAuditLog(tx, {
         tenantId: store.tenantId,
         actorId: ctx.userId,
@@ -189,7 +177,7 @@ export async function deleteStoreAction(storeId: string, slug: string): Promise<
         action: "location.delete",
         entity: "Location",
         entityId: storeId,
-        before: { name: store.name, address: store.address, status: store.status },
+        before: { name: store.name, address: store.address, status: store.status, orders, members, allowances },
       });
       await tx.location.delete({ where: { id: storeId } });
     });

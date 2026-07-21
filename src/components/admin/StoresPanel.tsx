@@ -308,8 +308,8 @@ export function StoresPanel({ tenantId, slug, stores }: { tenantId: string; slug
           <div className="flex items-start gap-2 rounded-lg bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              This permanently removes the store. If it holds orders, members or allowances the delete will be refused —
-              deactivate it instead to preserve that history.
+              This permanently removes the store, along with any orders and allowances tied to it. Members lose their
+              assignment to this store but keep their account. This cannot be undone.
             </span>
           </div>
           <div className="mt-4 flex gap-2">
