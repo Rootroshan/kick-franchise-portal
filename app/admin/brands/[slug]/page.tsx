@@ -152,12 +152,12 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
 
         <section>
           <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Custom Domains</h2>
-            <DomainsPanel tenantId={brand.id} initialDomains={domains} />
+            <PortalLoginLinksPanel hostname={primaryHostname} status={domainStatus} />
           </div>
 
-          <div className="mt-6">
-            <PortalLoginLinksPanel hostname={primaryHostname} />
+          <h2 className="mb-2 mt-6 text-sm font-semibold">Custom Domains</h2>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <DomainsPanel tenantId={brand.id} initialDomains={domains} />
           </div>
 
           <h2 className="mb-2 mt-6 text-sm font-semibold">Theme &amp; Branding</h2>
