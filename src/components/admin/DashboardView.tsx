@@ -216,8 +216,12 @@ export function DashboardView({ data }: { data: DashboardData }) {
       </div>
 
       {/* ---- RECENT ORDERS + ACTIVITY + QUICK ACTIONS ---- */}
+      {/* min-w-0 on the grid item: without it a grid item defaults to
+          min-width:auto, so the table's min-w-[560px] pushed this Card (and
+          the grid track containing it) wider than the row instead of
+          scrolling inside its own overflow-x-auto wrapper. */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card className="min-w-0 lg:col-span-2">
           <SectionTitle title="Recent Orders" sub="Latest order placements across all brands." href="/admin/orders" />
           <div className="-mx-4 scrollbar-hide overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">

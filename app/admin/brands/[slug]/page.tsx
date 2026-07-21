@@ -81,19 +81,31 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
         <KPIStatCard label="Revenue" value={formatCents(brand.revenueCents)} icon={DollarSign} tone="success" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="lg:col-span-2 flex flex-col gap-6">
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      {/* xl:, not lg: — at 1024-1280px a 2/3 + 1/3 split left the right rail
+          (Custom Domains, Theme, Activity) too narrow for its own inputs and
+          the left column's Stores table too narrow for its columns. Both
+          columns stack full-width until the viewport is wide enough for a
+          1/3 rail to actually fit its content. */}
+      {/* min-w-0 on the grid/flex chain down to each card: without it, a flex
+          or grid item defaults to min-width:auto, so the Stores table's
+          intrinsic content width (fixed column widths + padding) pushed this
+          whole section — and the grid track containing it — wider than the
+          viewport instead of scrolling inside its own overflow-x-auto
+          wrapper. Nothing here changes what scrolls, only what's allowed to
+          force its container wider. */}
+      <div className="grid min-w-0 gap-6 xl:grid-cols-3">
+        <section className="flex min-w-0 flex-col gap-6 xl:col-span-2">
+          <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm">
             <StoresPanel tenantId={brand.id} slug={brand.slug} stores={brand.stores} />
           </div>
 
           {/* Franchisor admins get their own section: creating one here pins
               role and tenant server-side, unlike the general Members panel. */}
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="min-w-0 rounded-xl border border-border bg-card p-4">
             <FranchisorAdminsPanel tenantId={brand.id} slug={brand.slug} admins={franchisorAdmins} />
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="min-w-0 rounded-xl border border-border bg-card p-4">
             <h2 className="mb-3 text-sm font-semibold">All Members</h2>
             <MembersPanel tenantId={brand.id} initialMembers={members} />
           </div>

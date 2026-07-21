@@ -58,7 +58,12 @@ export function MembersPanel({ tenantId, initialMembers }: { tenantId: string; i
         {members.length === 0 && <p className="text-sm text-muted-foreground">No members yet.</p>}
       </ul>
 
-      <form onSubmit={onSubmit} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+      {/* lg:, not sm: — this form sits in the Brand Detail two-column grid,
+          where the column can be ~650px wide at a viewport that's still
+          well under the sm breakpoint's real-world column width. sm:
+          matches viewport width, not this container's width, so it forced
+          4 fields onto one row at 1024px and truncated every placeholder. */}
+      <form onSubmit={onSubmit} className="grid gap-2 lg:grid-cols-[1fr_1fr_auto_auto]">
         <Input placeholder="Clerk user ID" value={clerkUserId} onChange={(e) => setClerkUserId(e.target.value)} required />
         <Input placeholder="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>

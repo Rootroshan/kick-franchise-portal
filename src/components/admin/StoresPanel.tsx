@@ -156,30 +156,42 @@ export function StoresPanel({ tenantId, slug, stores }: { tenantId: string; slug
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-left text-xs font-semibold text-foreground/70">
-                  <th className="px-3 py-2">Store name</th>
-                  <th className="px-3 py-2">Address</th>
-                  <th className="px-3 py-2">Manager</th>
-                  <th className="px-3 py-2">Phone</th>
-                  <th className="px-3 py-2 text-right">Members</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
+                  <th className="w-48 px-3 py-2">Store name</th>
+                  <th className="w-56 px-3 py-2">Address</th>
+                  <th className="w-40 px-3 py-2">Manager</th>
+                  <th className="w-32 px-3 py-2">Phone</th>
+                  <th className="w-20 px-3 py-2 text-right">Members</th>
+                  <th className="w-24 px-3 py-2">Status</th>
+                  <th className="w-32 whitespace-nowrap px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {visible.map((s) => (
                   <tr key={s.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2 font-medium text-foreground">{s.name}</td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{s.address ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <div className="text-xs text-foreground">{s.managerName ?? "—"}</div>
-                      {s.managerEmail && <div className="text-xs text-muted-foreground">{s.managerEmail}</div>}
+                    <td className="max-w-48 truncate px-3 py-2 font-medium text-foreground" title={s.name}>
+                      {s.name}
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{s.phone ?? "—"}</td>
+                    <td className="max-w-56 truncate px-3 py-2 text-xs text-muted-foreground" title={s.address ?? undefined}>
+                      {s.address ?? "—"}
+                    </td>
+                    <td className="max-w-40 px-3 py-2">
+                      <div className="truncate text-xs text-foreground" title={s.managerName ?? undefined}>
+                        {s.managerName ?? "—"}
+                      </div>
+                      {s.managerEmail && (
+                        <div className="truncate text-xs text-muted-foreground" title={s.managerEmail}>
+                          {s.managerEmail}
+                        </div>
+                      )}
+                    </td>
+                    <td className="max-w-32 truncate px-3 py-2 text-xs text-muted-foreground" title={s.phone ?? undefined}>
+                      {s.phone ?? "—"}
+                    </td>
                     <td className="px-3 py-2 text-right font-medium tabular-nums">{s.memberCount}</td>
                     <td className="px-3 py-2">
                       <StoreStatus status={s.status} />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-3 py-2">
                       <div className="flex items-center justify-end gap-1.5">
                         <Link
                           href={`/admin/stores/${s.id}`}

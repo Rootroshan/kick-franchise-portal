@@ -166,17 +166,20 @@ export function DomainsPanel({ tenantId, initialDomains }: { tenantId: string; i
         {domains.length === 0 && <p className="text-sm text-muted-foreground">No custom domains yet.</p>}
       </ul>
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <Input
-            placeholder="portal.example.com"
-            value={hostname}
-            onChange={(e) => setHostname(e.target.value)}
-            required
-            maxLength={255}
-          />
-        </div>
-        <Button type="submit" size="sm" disabled={submitting}>
+      {/* Always stacked, never side-by-side: this panel renders inside a
+          narrow rail column, and sm:flex-row matches viewport width, not
+          the column's own width — at a wide viewport it forced the input
+          and button onto one row even when the column itself was ~250px,
+          truncating the placeholder and cramping the button. */}
+      <form onSubmit={onSubmit} className="flex flex-col gap-2">
+        <Input
+          placeholder="portal.example.com"
+          value={hostname}
+          onChange={(e) => setHostname(e.target.value)}
+          required
+          maxLength={255}
+        />
+        <Button type="submit" size="sm" disabled={submitting} className="w-full">
           {submitting ? "Adding…" : "Add domain"}
         </Button>
       </form>

@@ -27,8 +27,11 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
         <KPIStatCard label="Engagement" value={`${store.score}%`} icon={ClipboardCheck} tone="success" />
       </div>
 
+      {/* min-w-0: without it this grid item defaults to min-width:auto, and
+          the table's min-w-[360px] pushes it (and the grid row) wider than
+          the viewport instead of scrolling inside its own overflow-x-auto. */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <h2 className="mb-2 text-sm font-semibold">Team</h2>
           {store.members.length === 0 ? (
             <EmptyState title="No team members" description="Nobody is assigned to this store yet." icon={Users} />
