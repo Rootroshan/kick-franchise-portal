@@ -161,3 +161,73 @@ export async function deleteUserAction(id: string): Promise<ActionResult> {
   revalidatePath("/admin/users");
   return { ok: true, message: "User deleted." };
 }
+
+// ─── Bulk actions ──────────────────────────────────────────────────────────────
+
+export type BulkActionResult = { ok: boolean; message: string; partial?: boolean };
+
+export async function bulkActivateUsersAction(ids: string[]): Promise<BulkActionResult> {
+  if (!ids.length) return { ok: false, message: "No users selected." };
+  const ctx = await requireRole("KICK_ADMIN")();
+  const results: Array<{ ok: boolean; message: string }> = [];
+
+  for (const id of ids) {
+    try {
+      await setUserActive(ctx, id, true);
+      results.push({ ok: true, message: "Activated." });
+    } catch (err) {
+      results.push({ ok: false, message: err instanceof Error ? err.message : "Failed." });
+    }
+  }
+
+  revalidatePath("/admin/users");
+  const ok = results.filter((r) => r.ok).length;
+  const fail2 = results.filter((r) => !r.ok).length;
+  if (fail2 === 0) return { ok: true, message: `${ok} user${ok === 1 ? "" : "s"} activated.` };
+  if (ok === 0) return { ok: false, message: `Could not activate ${fail2} user${fail2 === 1 ? "" : "s"}.` };
+  return { ok: true, partial: true, message: `${ok} activated, ${fail2} failed.` };
+}
+
+export async function bulkDeactivateUsersAction(ids: string[]): Promise<BulkActionResult> {
+  if (!ids.length) return { ok: false, message: "No users selected." };
+  const ctx = await requireRole("KICK_ADMIN")();
+  const results: Array<{ ok: boolean; message: string }> = [];
+
+  for (const id of ids) {
+    try {
+      await setUserActive(ctx, id, false);
+      results.push({ ok: true, message: "Deactivated." });
+    } catch (err) {
+      results.push({ ok: false, message: err instanceof Error ? err.message : "Failed." });
+    }
+  }
+
+  revalidatePath("/admin/users");
+  const ok = results.filter((r) => r.ok).length;
+  const fail2 = results.filter((r) => !r.ok).length;
+  if (fail2 === 0) return { ok: true, message: `${ok} user${ok === 1 ? "" : "s"} deactivated.` };
+  if (ok === 0) return { ok: false, message: `Could not deactivate ${fail2} user${fail2 === 1 ? "" : "s"}.` };
+  return { ok: true, partial: true, message: `${ok} deactivated, ${fail2} failed.` };
+}
+
+export async function bulkDeleteUsersAction(ids: string[]): Promise<BulkActionResult> {
+  if (!ids.length) return { ok: false, message: "No users selected." };
+  const ctx = await requireRole("KICK_ADMIN")();
+  const results: Array<{ ok: boolean; message: string }> = [];
+
+  for (const id of ids) {
+    try {
+      await deleteUser(ctx, id);
+      results.push({ ok: true, message: "Deleted." });
+    } catch (err) {
+      results.push({ ok: false, message: err instanceof Error ? err.message : "Failed." });
+    }
+  }
+
+  revalidatePath("/admin/users");
+  const ok = results.filter((r) => r.ok).length;
+  const fail2 = results.filter((r) => !r.ok).length;
+  if (fail2 === 0) return { ok: true, message: `${ok} user${ok === 1 ? "" : "s"} deleted.` };
+  if (ok === 0) return { ok: false, message: `Could not delete ${fail2} user${fail2 === 1 ? "" : "s"}.` };
+  return { ok: true, partial: true, message: `${ok} deleted, ${fail2} failed.` };
+}

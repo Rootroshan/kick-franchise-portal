@@ -5,7 +5,7 @@ import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, EmptyState, Pagination, PrimaryButtonLink } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { BrandsList } from "@/components/admin/BrandsList";
+import { BrandsListSection } from "@/components/admin/brands/BrandsListSection";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +78,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Recor
           icon={Building2}
         />
       ) : (
-        <BrandsList rows={visible} />
+        <BrandsListSection rows={visible} total={total} />
       )}
 
       <div className="flex items-center justify-between">

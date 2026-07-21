@@ -5,10 +5,30 @@ import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
+import { DataTableSection } from "@/components/admin/DataTableSection";
 import type { StoreRow } from "@/server/modules/tenants/stores";
+import type { BulkActionDef } from "@/components/admin/bulk/BulkActionToolbar";
+import { bulkActivateStoresAction, bulkDeactivateStoresAction } from "./storeActions";
+import { Power, PowerOff } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const STORE_ACTIONS: BulkActionDef[] = [
+  {
+    key: "activate",
+    label: "Activate",
+    icon: Power,
+    tone: "success",
+    action: bulkActivateStoresAction,
+  },
+  {
+    key: "deactivate",
+    label: "Deactivate",
+    icon: PowerOff,
+    tone: "warning",
+    action: bulkDeactivateStoresAction,
+  },
+];
 
 export default async function StoresPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const ctx = await requireRole("KICK_ADMIN")();
@@ -20,23 +40,23 @@ export default async function StoresPage({ searchParams }: { searchParams: Recor
   ]);
   const pages = pageCount(total, q.limit);
 
-  const columns: Column<StoreRow>[] = [
+  const columns = [
     {
       key: "name",
       header: "Store",
       sortKey: "name",
-      cell: (s) => (
+      cell: (s: StoreRow) => (
         <div>
           <div className="font-medium text-foreground">{s.name}</div>
           <div className="text-xs text-muted-foreground">{s.address ?? "No address"}</div>
         </div>
       ),
     },
-    { key: "brand", header: "Brand", cell: (s) => <span className="text-muted-foreground">{s.brandName}</span> },
-    { key: "status", header: "Status", sortKey: "status", cell: (s) => <StatusBadge status={s.status} /> },
-    { key: "members", header: "Members", hideOnMobile: true, cell: (s) => <span className="tabular-nums">{s.memberCount}</span> },
-    { key: "orders", header: "Orders", hideOnMobile: true, cell: (s) => <span className="tabular-nums">{s.orderCount}</span> },
-    { key: "revenue", header: "Revenue", cell: (s) => <span className="font-medium tabular-nums">{formatCents(s.revenueCents)}</span> },
+    { key: "brand", header: "Brand", cell: (s: StoreRow) => <span className="text-muted-foreground">{s.brandName}</span> },
+    { key: "status", header: "Status", sortKey: "status", cell: (s: StoreRow) => <StatusBadge status={s.status} /> },
+    { key: "members", header: "Members", hideOnMobile: true, cell: (s: StoreRow) => <span className="tabular-nums">{s.memberCount}</span> },
+    { key: "orders", header: "Orders", hideOnMobile: true, cell: (s: StoreRow) => <span className="tabular-nums">{s.orderCount}</span> },
+    { key: "revenue", header: "Revenue", cell: (s: StoreRow) => <span className="font-medium tabular-nums">{formatCents(s.revenueCents)}</span> },
   ];
 
   return (
@@ -65,17 +85,26 @@ export default async function StoresPage({ searchParams }: { searchParams: Recor
         ]}
       />
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(s) => s.id}
-        rowHref={(s) => `/admin/stores/${s.id}`}
-        basePath="/admin/stores"
-        currentParams={q.raw}
-        sort={q.sort}
-        direction={q.direction}
-        empty={{ title: "No stores found", description: q.search || q.brand ? "Try different filters." : "Stores appear here once brands add locations." }}
-      />
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+          {q.search || q.brand ? "No stores match your filters." : "Stores appear here once brands add locations."}
+        </div>
+      ) : (
+        <DataTableSection
+          rows={rows}
+          columns={columns}
+          rowKey={(s) => s.id}
+          rowHref={(s) => `/admin/stores/${s.id}`}
+          basePath="/admin/stores"
+          currentParams={q.raw}
+          sort={q.sort}
+          direction={q.direction}
+          empty={{ title: "No stores found", description: q.search || q.brand ? "Try different filters." : "Stores appear here once brands add locations." }}
+          actions={STORE_ACTIONS}
+          itemName="store"
+          total={total}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <p className="mt-3 text-xs text-muted-foreground">{total} store{total === 1 ? "" : "s"} total</p>

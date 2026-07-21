@@ -5,10 +5,25 @@ import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { PageHeader, KPIStatCard, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
+import { DataTableSection } from "@/components/admin/DataTableSection";
 import type { TaskRow } from "@/server/modules/tasks/admin";
+import type { BulkActionDef } from "@/components/admin/bulk/BulkActionToolbar";
+import { bulkDeleteTasksAction } from "./taskActions";
+import { Trash2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const TASK_ACTIONS: BulkActionDef[] = [
+  {
+    key: "delete",
+    label: "Delete",
+    icon: Trash2,
+    tone: "destructive",
+    confirmTitle: "Delete selected tasks?",
+    confirmMessage: "This removes the task and all its assignments. Store progress data is preserved.",
+    action: bulkDeleteTasksAction,
+  },
+];
 
 export default async function TasksPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const ctx = await requireRole("KICK_ADMIN")();
@@ -20,12 +35,12 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
   ]);
   const pages = pageCount(total, q.limit);
 
-  const columns: Column<TaskRow>[] = [
+  const columns = [
     {
       key: "title",
       header: "Task",
       sortKey: "title",
-      cell: (t) => (
+      cell: (t: TaskRow) => (
         <div>
           <div className="font-medium text-foreground">{t.title}</div>
           <div className="text-xs text-muted-foreground">{t.brandName}</div>
@@ -35,7 +50,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
     {
       key: "progress",
       header: "Progress",
-      cell: (t) => {
+      cell: (t: TaskRow) => {
         const pct = t.total === 0 ? 0 : Math.round((t.completed / t.total) * 100);
         return (
           <div className="flex items-center gap-2">
@@ -52,7 +67,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
       header: "Due",
       sortKey: "dueAt",
       hideOnMobile: true,
-      cell: (t) => (
+      cell: (t: TaskRow) => (
         <span className={t.isOverdue ? "font-medium text-status-error" : "text-muted-foreground"}>
           {t.dueAt ? t.dueAt.toLocaleDateString() : "No due date"}
           {t.isOverdue && " · Overdue"}
@@ -88,16 +103,25 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
         ]}
       />
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(t) => t.id}
-        basePath="/admin/tasks"
-        currentParams={q.raw}
-        sort={q.sort}
-        direction={q.direction}
-        empty={{ title: "No tasks found", description: q.search || q.brand || q.status ? "Try different filters." : "Tasks from all brands appear here." }}
-      />
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+          {q.search || q.brand || q.status ? "No tasks match your filters." : "Tasks from all brands appear here."}
+        </div>
+      ) : (
+        <DataTableSection
+          rows={rows}
+          columns={columns}
+          rowKey={(t) => t.id}
+          basePath="/admin/tasks"
+          currentParams={q.raw}
+          sort={q.sort}
+          direction={q.direction}
+          empty={{ title: "No tasks found", description: q.search || q.brand || q.status ? "Try different filters." : "Tasks from all brands appear here." }}
+          actions={TASK_ACTIONS}
+          itemName="task"
+          total={total}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <p className="mt-3 text-xs text-muted-foreground">{total} task{total === 1 ? "" : "s"} total</p>

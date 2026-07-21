@@ -5,10 +5,32 @@ import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { PageHeader, KPIStatCard, StatusBadge, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
+import { DataTableSection } from "@/components/admin/DataTableSection";
 import type { AnnouncementRow } from "@/server/modules/announcements/admin";
+import type { BulkActionDef } from "@/components/admin/bulk/BulkActionToolbar";
+import { bulkPublishAnnouncementsAction, bulkDeleteAnnouncementsAction } from "./announcementActions";
+import { Trash2, Send } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const ANNOUNCEMENT_ACTIONS: BulkActionDef[] = [
+  {
+    key: "publish",
+    label: "Publish",
+    icon: Send,
+    tone: "success",
+    action: bulkPublishAnnouncementsAction,
+  },
+  {
+    key: "delete",
+    label: "Delete",
+    icon: Trash2,
+    tone: "destructive",
+    confirmTitle: "Delete selected announcements?",
+    confirmMessage: "Published announcements will be removed from all stores.",
+    action: bulkDeleteAnnouncementsAction,
+  },
+];
 
 export default async function AnnouncementsPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const ctx = await requireRole("KICK_ADMIN")();
@@ -20,12 +42,12 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
   ]);
   const pages = pageCount(total, q.limit);
 
-  const columns: Column<AnnouncementRow>[] = [
+  const columns = [
     {
       key: "title",
       header: "Announcement",
       sortKey: "title",
-      cell: (a) => (
+      cell: (a: AnnouncementRow) => (
         <div className="flex items-center gap-2">
           {a.isPinned && <Pin className="h-3.5 w-3.5 shrink-0 text-status-warning" aria-label="Pinned" />}
           <div>
@@ -35,15 +57,15 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
         </div>
       ),
     },
-    { key: "brand", header: "Brand", cell: (a) => <span className="text-muted-foreground">{a.brandName}</span> },
-    { key: "status", header: "Status", sortKey: "status", cell: (a) => <StatusBadge status={a.status} /> },
-    { key: "acks", header: "Acks", hideOnMobile: true, cell: (a) => <span className="tabular-nums">{a.requiresAck ? a.ackCount : "—"}</span> },
+    { key: "brand", header: "Brand", cell: (a: AnnouncementRow) => <span className="text-muted-foreground">{a.brandName}</span> },
+    { key: "status", header: "Status", sortKey: "status", cell: (a: AnnouncementRow) => <StatusBadge status={a.status} /> },
+    { key: "acks", header: "Acks", hideOnMobile: true, cell: (a: AnnouncementRow) => <span className="tabular-nums">{a.requiresAck ? a.ackCount : "—"}</span> },
     {
       key: "publishAt",
       header: "Publish",
       sortKey: "publishAt",
       hideOnMobile: true,
-      cell: (a) => <span className="text-muted-foreground">{a.publishAt ? a.publishAt.toLocaleDateString() : "—"}</span>,
+      cell: (a: AnnouncementRow) => <span className="text-muted-foreground">{a.publishAt ? a.publishAt.toLocaleDateString() : "—"}</span>,
     },
   ];
 
@@ -75,16 +97,25 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
         ]}
       />
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(a) => a.id}
-        basePath="/admin/announcements"
-        currentParams={q.raw}
-        sort={q.sort}
-        direction={q.direction}
-        empty={{ title: "No announcements found", description: q.search || q.brand || q.status ? "Try different filters." : "Announcements from all brands appear here." }}
-      />
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+          {q.search || q.brand || q.status ? "No announcements match your filters." : "Announcements from all brands appear here."}
+        </div>
+      ) : (
+        <DataTableSection
+          rows={rows}
+          columns={columns}
+          rowKey={(a) => a.id}
+          basePath="/admin/announcements"
+          currentParams={q.raw}
+          sort={q.sort}
+          direction={q.direction}
+          empty={{ title: "No announcements found", description: q.search || q.brand || q.status ? "Try different filters." : "Announcements from all brands appear here." }}
+          actions={ANNOUNCEMENT_ACTIONS}
+          itemName="announcement"
+          total={total}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <p className="mt-3 text-xs text-muted-foreground">{total} announcement{total === 1 ? "" : "s"} total</p>

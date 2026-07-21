@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   useFloating,
@@ -15,7 +15,6 @@ import {
   FloatingPortal,
   FloatingFocusManager,
 } from "@floating-ui/react";
-import { useRef } from "react";
 import {
   MoreVertical,
   Eye,
@@ -28,9 +27,10 @@ import {
   X,
   AlertTriangle,
 } from "lucide-react";
-import { deleteBrandAction, setBrandStatusAction } from "@/app/admin/brands/actions";
+import { deleteBrandAction, setBrandStatusAction, getBrandBlockersAction } from "@/app/admin/brands/actions";
 import { formatCents } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import type { BrandRow } from "@/server/modules/tenants/brands";
 
 type Pick_ = "view" | "edit" | "domain" | "toggle" | "delete";
@@ -49,7 +49,7 @@ export function BrandRowMenu({ brand }: { brand: BrandRow }) {
   const [banner, setBanner] = useState<{ ok: boolean; message: string } | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const listRef = useRef<Array<HTMLButtonElement | null>>([]);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const { refs, floatingStyles, context } = useFloating({
     open,
@@ -98,9 +98,21 @@ export function BrandRowMenu({ brand }: { brand: BrandRow }) {
     }
   };
 
-  const run = (fn: () => Promise<{ ok: boolean; message: string }>) => {
+  const run = (fn: () => Promise<{ ok: boolean; message: string }>, dialogMessage: string) => {
+    setActionLoading({ loading: true, message: dialogMessage });
     startTransition(async () => {
-      const res = await fn();
+      let res: { ok: boolean; message: string };
+      try {
+        res = await Promise.race([
+          fn(),
+          new Promise<{ ok: boolean; message: string }>((_, reject) =>
+            setTimeout(() => reject(new Error("Request timed out after 30 seconds. Please try again.")), 30_000)
+          ),
+        ]);
+      } catch (err) {
+        res = { ok: false, message: err instanceof Error ? err.message : "Action failed. Please try again." };
+      }
+      setActionLoading({ loading: false, message: null });
       setBanner(res);
       if (res.ok) {
         setDialog(null);
@@ -108,6 +120,12 @@ export function BrandRowMenu({ brand }: { brand: BrandRow }) {
       }
     });
   };
+
+  // Shared action loading overlay state
+  const [actionLoading, setActionLoading] = useState<{ loading: boolean; message: string | null }>({
+    loading: false,
+    message: null,
+  });
 
   return (
     <>
@@ -182,33 +200,43 @@ export function BrandRowMenu({ brand }: { brand: BrandRow }) {
       )}
 
       {dialog === "toggle" && (
-        <Modal title={suspended ? `Activate ${brand.name}?` : `Deactivate ${brand.name}?`} onClose={() => setDialog(null)}>
+        <Modal title={suspended ? `Activate ${brand.name}?` : `Deactivate ${brand.name}?`} onClose={() => { if (!actionLoading.loading) setDialog(null); }}>
           <p className="text-sm text-muted-foreground">
             {suspended
               ? "The brand's portal will accept logins again. All historical data is unchanged."
               : "Users of this brand will be blocked from signing in and no new activity can be recorded. Every store, order and report is preserved, and you can reactivate at any time."}
           </p>
           <div className="mt-4 flex gap-2">
-            <button onClick={() => setDialog(null)} disabled={pending} className={secondaryBtn}>
+            <button onClick={() => setDialog(null)} disabled={actionLoading.loading} className={secondaryBtn}>
               Cancel
             </button>
             <button
-              onClick={() => run(() => setBrandStatusAction(brand.id, suspended ? "active" : "suspended"))}
-              disabled={pending}
+              onClick={() => run(
+                () => setBrandStatusAction(brand.id, suspended ? "active" : "suspended"),
+                suspended ? "Activating brand…" : "Deactivating brand…"
+              )}
+              disabled={actionLoading.loading}
               className={cn(
                 "inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md text-sm font-semibold text-white hover:opacity-95 disabled:opacity-60",
                 suspended ? "bg-status-success" : "bg-status-warning"
               )}
             >
-              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {suspended ? "Activate" : "Deactivate"}
+              {actionLoading.loading ? null : (suspended ? "Activate" : "Deactivate")}
+              {actionLoading.loading && <span className="inline-flex items-center gap-1.5"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />{actionLoading.message}</span>}
             </button>
           </div>
         </Modal>
       )}
 
       {dialog === "delete" && (
-        <DeleteBrandDialog brand={brand} pending={pending} onCancel={() => setDialog(null)} onConfirm={(typed) => run(() => deleteBrandAction(brand.id, typed))} />
+        <DeleteBrandDialog brand={brand} pending={actionLoading.loading} onCancel={() => setDialog(null)} onConfirm={(typed) => run(
+          () => deleteBrandAction(brand.id, typed),
+          "Deleting brand…"
+        )} />
+      )}
+
+      {actionLoading.loading && (
+        <LoadingOverlay message={actionLoading.message ?? "Processing…"} />
       )}
     </>
   );
@@ -220,6 +248,12 @@ export function BrandRowMenu({ brand }: { brand: BrandRow }) {
  * Requires the exact brand name to be typed. That is a speed bump against a
  * mis-click, not a security control — the server independently re-checks the
  * name and refuses when related records exist.
+ *
+ * The modal opens INSTANTLY with the confirm field ready; the actual blocker
+ * list (stores/members/orders/allowance ledger/rebate accruals/verified
+ * domains) loads in the background via getBrandBlockersAction — the same
+ * check deleteBrand() itself runs, so the warning shown here can never drift
+ * from what the server will actually enforce.
  */
 function DeleteBrandDialog({
   brand,
@@ -233,7 +267,22 @@ function DeleteBrandDialog({
   onConfirm: (typed: string) => void;
 }) {
   const [typed, setTyped] = useState("");
+  const [blockers, setBlockers] = useState<{ kind: string; count: number; label: string }[] | null>(null);
   const matches = typed.trim() === brand.name;
+
+  useEffect(() => {
+    let cancelled = false;
+    getBrandBlockersAction(brand.id)
+      .then((rows) => {
+        if (!cancelled) setBlockers(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setBlockers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brand.id]);
 
   return (
     <Modal title="Delete Brand" onClose={onCancel} destructive>
@@ -264,15 +313,20 @@ function DeleteBrandDialog({
         </div>
       </div>
 
-      {(brand.storeCount > 0 || brand.memberCount > 0 || brand.orderCount > 0) && (
+      {blockers === null ? (
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Checking for related records…
+        </div>
+      ) : blockers.length > 0 ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            This brand has related records. Permanent deletion will be refused — deactivate it instead to preserve its
-            history.
+            This brand still has {blockers.map((b) => `${b.count} ${b.label}${b.count === 1 ? "" : "s"}`).join(", ")}.
+            Permanent deletion will be refused — deactivate it instead to preserve its history.
           </span>
         </div>
-      )}
+      ) : null}
 
       <label className="mt-4 block text-sm">
         To confirm, type the brand name <strong className="text-foreground">&ldquo;{brand.name}&rdquo;</strong> in the
@@ -296,8 +350,11 @@ function DeleteBrandDialog({
           disabled={pending || !matches}
           className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md bg-status-error text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50"
         >
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          Delete Brand
+          {pending ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</>
+          ) : (
+            <><Trash2 className="h-4 w-4" /> Delete Brand</>
+          )}
         </button>
       </div>
     </Modal>

@@ -6,7 +6,8 @@ import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge, Pagination, GhostButtonLink } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
+import { DataTableSection } from "@/components/admin/DataTableSection";
+import { rebatesExportAction } from "@/components/admin/rebates/RebatesExportAction";
 import type { RebateRuleRow } from "@/server/modules/rebates/admin";
 
 export const dynamic = "force-dynamic";
@@ -21,31 +22,31 @@ export default async function RebatesPage({ searchParams }: { searchParams: Reco
   ]);
   const pages = pageCount(total, q.limit);
 
-  const columns: Column<RebateRuleRow>[] = [
+  const columns = [
     {
       key: "product",
       header: "Product",
-      cell: (r) => (
+      cell: (r: RebateRuleRow) => (
         <div>
           <div className="font-medium text-foreground">{r.productName}</div>
           <div className="text-xs text-muted-foreground">{r.brandName}</div>
         </div>
       ),
     },
-    { key: "type", header: "Rebate", cell: (r) => <span className="tabular-nums">{formatRebateValue(r.type, r.value)}</span> },
-    { key: "active", header: "Status", cell: (r) => <StatusBadge status={r.isActive ? "active" : "expired"} /> },
+    { key: "type", header: "Rebate", cell: (r: RebateRuleRow) => <span className="tabular-nums">{formatRebateValue(r.type, r.value)}</span> },
+    { key: "active", header: "Status", cell: (r: RebateRuleRow) => <StatusBadge status={r.isActive ? "active" : "expired"} /> },
     {
       key: "effective",
       header: "Effective",
       sortKey: "effectiveFrom",
       hideOnMobile: true,
-      cell: (r) => (
+      cell: (r: RebateRuleRow) => (
         <span className="text-muted-foreground">
           {r.effectiveFrom.toLocaleDateString()} → {r.effectiveTo ? r.effectiveTo.toLocaleDateString() : "ongoing"}
         </span>
       ),
     },
-    { key: "accrued", header: "Accrued", cell: (r) => <span className="font-medium tabular-nums">{formatCents(r.accruedCents)}</span> },
+    { key: "accrued", header: "Accrued", cell: (r: RebateRuleRow) => <span className="font-medium tabular-nums">{formatCents(r.accruedCents)}</span> },
   ];
 
   return (
@@ -71,16 +72,25 @@ export default async function RebatesPage({ searchParams }: { searchParams: Reco
         ]}
       />
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.id}
-        basePath="/admin/rebates"
-        currentParams={q.raw}
-        sort={q.sort}
-        direction={q.direction}
-        empty={{ title: "No rebate rules found", description: q.search || q.brand ? "Try different filters." : "Rebate rules appear here once configured." }}
-      />
+      {rows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+          {q.search || q.brand ? "No rebate rules match your filters." : "Rebate rules appear here once configured."}
+        </div>
+      ) : (
+        <DataTableSection
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.id}
+          basePath="/admin/rebates"
+          currentParams={q.raw}
+          sort={q.sort}
+          direction={q.direction}
+          empty={{ title: "No rebate rules found", description: q.search || q.brand ? "Try different filters." : "Rebate rules appear here once configured." }}
+          actions={[rebatesExportAction]}
+          itemName="rebate"
+          total={total}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <p className="mt-3 text-xs text-muted-foreground">{total} rule{total === 1 ? "" : "s"} total</p>

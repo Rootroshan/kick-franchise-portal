@@ -1,11 +1,12 @@
-import { Images, CheckCircle2, Archive, HardDrive, FileImage, Info } from "lucide-react";
+import { Images, CheckCircle2, Archive, HardDrive, Info } from "lucide-react";
 import { requireRole } from "@/server/modules/identity/guard";
 import { listAssetsAdmin, getAssetKpis, getAssetTypeOptions } from "@/server/modules/assets/admin";
 import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { formatBytes } from "@/lib/utils";
-import { PageHeader, KPIStatCard, StatusBadge, EmptyState, Pagination } from "@/components/admin/kit";
+import { PageHeader, KPIStatCard, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
+import { ArtworkListSection } from "@/components/admin/artwork/ArtworkListSection";
 
 export const dynamic = "force-dynamic";
 
@@ -54,32 +55,11 @@ export default async function ArtworkPage({ searchParams }: { searchParams: Reco
       />
 
       {rows.length === 0 ? (
-        <EmptyState
-          title="No artwork found"
-          description={q.search || q.brand || q.status ? "Try different filters." : "Assets uploaded by Kick appear here."}
-          icon={FileImage}
-        />
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {rows.map((a) => (
-            <div key={a.id} className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
-              <div className="flex aspect-video items-center justify-center bg-muted">
-                <FileImage className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <div className="flex flex-1 flex-col gap-1 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="truncate text-sm font-medium" title={a.name}>{a.name}</span>
-                  {a.version > 1 && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">v{a.version}</span>}
-                </div>
-                <span className="truncate text-xs text-muted-foreground">{a.brandName}</span>
-                <div className="mt-auto flex items-center justify-between pt-2">
-                  <StatusBadge status={a.status} />
-                  <span className="text-[11px] text-muted-foreground">{formatBytes(a.sizeBytes)}</span>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+          {q.search || q.brand || q.status ? "No artwork matches your filters." : "Assets uploaded by Kick appear here."}
         </div>
+      ) : (
+        <ArtworkListSection rows={rows} total={total} />
       )}
 
       <div className="flex items-center justify-between">

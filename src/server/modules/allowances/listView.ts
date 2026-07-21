@@ -3,10 +3,10 @@ import { HttpError } from "@/server/modules/identity/errors";
 import type { AdminListQuery } from "@/lib/adminQuery";
 
 /** Balance from an allowance's grant + ledger deltas (append-only ledger). */
-function balanceOf(grantedCents: number, ledger: Array<{ deltaCents: number }>): number {
+export function balanceOf(grantedCents: number, ledger: Array<{ deltaCents: number }>): number {
   return ledger.reduce((s, l) => s + l.deltaCents, grantedCents);
 }
-function usedOf(ledger: Array<{ deltaCents: number; reason: string }>): number {
+export function usedOf(ledger: Array<{ deltaCents: number; reason: string }>): number {
   return ledger.filter((l) => l.reason === "ORDER_DEBIT").reduce((s, l) => s + Math.abs(l.deltaCents), 0);
 }
 

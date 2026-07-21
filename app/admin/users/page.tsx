@@ -6,7 +6,7 @@ import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { PageHeader, KPIStatCard, EmptyState, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { UsersTable } from "@/components/admin/UsersTable";
+import { UsersListSection } from "@/components/admin/users/UsersListSection";
 import { CreateUserDialog } from "@/components/admin/CreateUserDialog";
 import { cn } from "@/lib/utils";
 
@@ -82,7 +82,7 @@ export default async function UsersPage({
           icon={UsersRound}
         />
       ) : (
-        <UsersTable rows={rows} currentUserId={ctx.userId} brandOptions={brandOptions} />
+        <UsersListSection rows={rows} currentUserId={ctx.userId} brandOptions={brandOptions} total={total} />
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">

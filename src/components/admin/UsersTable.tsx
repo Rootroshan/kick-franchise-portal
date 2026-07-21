@@ -32,6 +32,8 @@ import {
   resetPasswordAction,
   deleteUserAction,
 } from "@/app/admin/users/actions";
+import { useBulkSelection } from "@/components/admin/bulk/BulkSelection";
+import { BulkCheckbox, BulkSelectAll } from "@/components/admin/bulk/BulkCheckbox";
 import { cn } from "@/lib/utils";
 
 type Option = { value: string; label: string };
@@ -47,10 +49,14 @@ export function UsersTable({
   rows,
   currentUserId,
   brandOptions,
+  selectable = false,
+  totalFiltered,
 }: {
   rows: UserRow[];
   currentUserId: string;
   brandOptions: Option[];
+  selectable?: boolean;
+  totalFiltered?: number;
 }) {
   // Keyed "<layout>:<userId>", not just the user id. The desktop table and the
   // mobile card list are BOTH mounted at all times — Tailwind only toggles
@@ -62,6 +68,13 @@ export function UsersTable({
   const [dialog, setDialog] = useState<{ kind: MenuPick; user: UserRow } | null>(null);
   const [banner, setBanner] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Sync bulk selection with current page
+  const { setPage, isSelected } = useBulkSelection();
+  useEffect(() => {
+    if (!selectable) return;
+    setPage(rows.map((u) => u.id), totalFiltered ?? rows.length);
+  }, [rows, selectable, setPage, totalFiltered]);
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>) => {
     startTransition(async () => {
@@ -94,6 +107,7 @@ export function UsersTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
+              {selectable && <th className="w-10 px-4 py-3 font-medium"><BulkSelectAll allIds={rows.map((u) => u.id)} totalFiltered={totalFiltered ?? rows.length} /></th>}
               <th className="px-4 py-3 font-medium">User</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Brand / Store</th>
@@ -104,8 +118,15 @@ export function UsersTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((u) => (
-              <tr key={u.id} className="border-b border-border last:border-0">
+            {rows.map((u) => {
+              const selected = selectable && isSelected(u.id);
+              return (
+              <tr key={u.id} className={`border-b border-border last:border-0 transition-colors ${selected ? "bg-status-info/5" : "hover:bg-muted/30"}`}>
+                {selectable && (
+                  <td className="w-10 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <BulkCheckbox id={u.id} />
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <Avatar name={u.name ?? u.email} />
@@ -139,17 +160,21 @@ export function UsersTable({
                   />
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* Mobile cards — a 7-column table cannot work on a phone. */}
       <div className="flex flex-col gap-3 md:hidden">
-        {rows.map((u) => (
-          <div key={u.id} className="rounded-xl border border-border bg-card p-4">
+        {rows.map((u) => {
+          const selected = selectable && isSelected(u.id);
+          return (
+          <div key={u.id} className={`rounded-xl border bg-card p-4 transition-colors ${selected ? "border-status-info/40 bg-status-info/5" : "border-border"}`}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-3">
+                {selectable && <BulkCheckbox id={u.id} />}
                 <Avatar name={u.name ?? u.email} />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{u.name ?? "—"}</div>
@@ -177,7 +202,8 @@ export function UsersTable({
               {u.locationName ? ` · ${u.locationName}` : ""} · last login {relativeTime(u.lastLoginAt)}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {dialog && (
