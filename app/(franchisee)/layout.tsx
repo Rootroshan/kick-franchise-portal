@@ -1,12 +1,17 @@
 import { redirect } from "next/navigation";
 import { getRequestContext } from "@/server/modules/identity/requestContext";
 import { HttpError } from "@/server/modules/identity/errors";
+import { withTenant } from "@/server/db/withTenant";
+import { parseTenantTheme } from "@/lib/theme";
+import { getStoreNotifications } from "@/server/modules/notifications/store";
 import { CartProvider } from "@/components/franchisee/CartContext";
 import { BottomNav } from "@/components/franchisee/BottomNav";
+import { TopBar } from "@/components/franchisee/TopBar";
 
 export default async function FranchiseeLayout({ children }: { children: React.ReactNode }) {
+  let ctx;
   try {
-    const ctx = await getRequestContext();
+    ctx = await getRequestContext();
     if (ctx.role === "KICK_ADMIN") redirect("/admin");
     if (ctx.role === "FRANCHISOR_ADMIN") redirect("/franchisor/dashboard");
   } catch (err) {
@@ -22,9 +27,21 @@ export default async function FranchiseeLayout({ children }: { children: React.R
     throw err;
   }
 
+  const tenantId = ctx.tenantId;
+  const [brand, unreadCount] = await Promise.all([
+    tenantId
+      ? withTenant(ctx, (tx) => tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true, theme: true } }))
+      : Promise.resolve(null),
+    // Reuses the same signal set the store's own /notifications page reads —
+    // no separate count query, no drift between the badge and the list.
+    getStoreNotifications(ctx).then((n) => n.length).catch(() => 0),
+  ]);
+  const theme = parseTenantTheme(brand?.theme);
+
   return (
     <CartProvider>
       <div className="mx-auto min-h-screen w-full max-w-md pb-16 sm:max-w-2xl md:max-w-4xl">
+        <TopBar brandName={brand?.name ?? "Store Portal"} logoUrl={theme.logoUrl} unreadCount={unreadCount} />
         <main className="px-4 py-4">{children}</main>
         <BottomNav />
       </div>
