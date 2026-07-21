@@ -7,6 +7,22 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "10mb",
     },
+    // argon2 loads its native .node binary at runtime via node-gyp-build
+    // based on platform detection, which Next's output file tracing can't
+    // follow statically — it was silently dropping the prebuild from every
+    // serverless function bundle, causing "No native build was found" in
+    // production (while working locally, where node_modules is untraced and
+    // complete). Next 14.2's outputFileTracingIncludes lives under
+    // `experimental`, not top-level (that move happened in a later release).
+    outputFileTracingIncludes: {
+      "/app/api/auth/[...nextauth]": ["node_modules/argon2/**/*"],
+      "/app/sign-out": ["node_modules/argon2/**/*"],
+      "/app/sign-in/[[...sign-in]]": ["node_modules/argon2/**/*"],
+      "/app/forgot-password": ["node_modules/argon2/**/*"],
+      "/app/admin/users": ["node_modules/argon2/**/*"],
+      "/app/admin/roles": ["node_modules/argon2/**/*"],
+      "/app/admin/brands/[slug]": ["node_modules/argon2/**/*"],
+    },
   },
   async redirects() {
     return [
