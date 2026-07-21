@@ -5,13 +5,7 @@ import { HttpError } from "@/server/modules/identity/errors";
 import { normaliseHostname, verificationRecordName, shortHostLabel } from "./domainNormalise";
 import { cnameTarget, attachDomain, detachDomain, isHostingConfigured, getDomainHostingStatus } from "./hostingProvider";
 import type { z } from "zod";
-import type {
-  createTenantSchema,
-  updateTenantSchema,
-  createLocationSchema,
-  createCustomDomainSchema,
-  createMembershipSchema,
-} from "./schemas";
+import type { createTenantSchema, updateTenantSchema, createLocationSchema, createCustomDomainSchema } from "./schemas";
 
 /** KICK_ADMIN only — tenant/brand provisioning. Instantly gives the brand its own portal (per Dev Brief §2). */
 export async function createTenant(ctx: RequestContext, input: z.infer<typeof createTenantSchema>) {
@@ -25,6 +19,24 @@ export async function createTenant(ctx: RequestContext, input: z.infer<typeof cr
         slug: input.slug,
         clerkOrgId: input.clerkOrgId ?? null,
         theme: input.theme,
+        legalName: input.legalName || null,
+        contactName: input.contactName,
+        email: input.email,
+        phone: input.phone,
+        addressLine1: input.addressLine1,
+        addressCity: input.addressCity,
+        addressState: input.addressState,
+        addressPostalCode: input.addressPostalCode,
+        addressCountry: input.addressCountry,
+        // Free-text address is derived from the structured fields so
+        // existing display code (which reads this single string) keeps
+        // working without every caller needing to know about the new
+        // structured columns.
+        hqAddress: [input.addressLine1, input.addressCity, input.addressState, input.addressPostalCode, input.addressCountry]
+          .filter(Boolean)
+          .join(", "),
+        website: input.website || null,
+        status: input.status ?? "active",
       },
     });
 
@@ -54,8 +66,15 @@ export async function updateTenant(ctx: RequestContext, tenantId: string, input:
         status: input.status,
         // "" means the operator cleared the field, which must persist as NULL
         // rather than an empty string — undefined would leave the old value.
+        legalName: input.legalName === undefined ? undefined : input.legalName || null,
+        contactName: input.contactName === undefined ? undefined : input.contactName || null,
         tagline: input.tagline === undefined ? undefined : input.tagline || null,
         hqAddress: input.hqAddress === undefined ? undefined : input.hqAddress || null,
+        addressLine1: input.addressLine1 === undefined ? undefined : input.addressLine1 || null,
+        addressCity: input.addressCity === undefined ? undefined : input.addressCity || null,
+        addressState: input.addressState === undefined ? undefined : input.addressState || null,
+        addressPostalCode: input.addressPostalCode === undefined ? undefined : input.addressPostalCode || null,
+        addressCountry: input.addressCountry === undefined ? undefined : input.addressCountry || null,
         phone: input.phone === undefined ? undefined : input.phone || null,
         email: input.email === undefined ? undefined : input.email || null,
         website: input.website === undefined ? undefined : input.website || null,
@@ -88,7 +107,25 @@ export async function createLocation(ctx: RequestContext, tenantId: string, inpu
     if (!tenant) throw new HttpError(404, "Tenant not found");
 
     const location = await tx.location.create({
-      data: { tenantId, name: input.name, address: input.address ?? null },
+      data: {
+        tenantId,
+        name: input.name,
+        storeCode: input.storeCode,
+        addressLine1: input.addressLine1,
+        addressCity: input.addressCity,
+        addressState: input.addressState,
+        addressPostalCode: input.addressPostalCode,
+        addressCountry: input.addressCountry,
+        address: [input.addressLine1, input.addressCity, input.addressState, input.addressPostalCode, input.addressCountry]
+          .filter(Boolean)
+          .join(", "),
+        phone: input.phone,
+        email: input.email,
+        managerName: input.managerName,
+        managerEmail: input.managerEmail,
+        managerPhone: input.managerPhone,
+        status: input.status ?? "active",
+      },
     });
 
     await writeAuditLog(tx, {
@@ -407,49 +444,6 @@ export async function removeCustomDomain(ctx: RequestContext, domainId: string) 
 export async function listCustomDomains(ctx: RequestContext, tenantId: string | null) {
   if (!tenantId) throw new HttpError(400, "A tenant must be specified");
   return withTenant(ctx, (tx) => tx.customDomain.findMany({ where: { tenantId } }));
-}
-
-/** [K,F]: invite/assign a user to this tenant with a role. Franchisor may only invite FRANCHISEE_USER within their own tenant. */
-export async function createMembership(ctx: RequestContext, tenantId: string, input: z.infer<typeof createMembershipSchema>) {
-  if (ctx.role === "FRANCHISOR_ADMIN" && input.role !== "FRANCHISEE_USER") {
-    throw new HttpError(403, "Franchisor admins may only invite franchisee users");
-  }
-  return withTenant(ctx, async (tx) => {
-    if (input.locationId) {
-      const location = await tx.location.findUnique({ where: { id: input.locationId } });
-      if (!location || location.tenantId !== tenantId) {
-        throw new HttpError(422, "Location does not belong to this tenant");
-      }
-    }
-
-    const membership = await tx.membership.upsert({
-      where: { clerkUserId_tenantId: { clerkUserId: input.clerkUserId, tenantId } },
-      create: {
-        clerkUserId: input.clerkUserId,
-        tenantId,
-        locationId: input.locationId ?? null,
-        role: input.role,
-        email: input.email ?? null,
-        displayName: input.displayName ?? null,
-      },
-      update: {
-        locationId: input.locationId ?? null,
-        role: input.role,
-      },
-    });
-
-    await writeAuditLog(tx, {
-      tenantId,
-      actorId: ctx.userId,
-      role: ctx.role,
-      action: "membership.create",
-      entity: "Membership",
-      entityId: membership.id,
-      after: { role: membership.role, locationId: membership.locationId },
-    });
-
-    return membership;
-  });
 }
 
 export async function listMemberships(ctx: RequestContext, tenantId: string | null) {

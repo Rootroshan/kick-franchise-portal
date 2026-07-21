@@ -50,6 +50,14 @@ export async function createUserAction(input: {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) return { ok: false, message: "Enter a valid email address." };
   if (input.password !== input.confirmPassword) return { ok: false, message: "Passwords do not match." };
   if (!isRole(input.role)) return { ok: false, message: "Select a valid role." };
+  // Franchisee (store-level) accounts always need a specific store, and this
+  // generic dialog has no store context — creating one here would either
+  // silently leave locationId unset or accept an arbitrary client-supplied
+  // id with no ownership check. They must be created from that store's own
+  // page instead (see app/admin/stores/[id]/userActions.ts).
+  if (input.role === "FRANCHISEE_USER") {
+    return { ok: false, message: "Create franchisee users from their store's page, not here." };
+  }
 
   try {
     await createUser(ctx, {

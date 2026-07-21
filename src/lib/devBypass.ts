@@ -37,6 +37,7 @@ export function devBypassContext(): RequestContext | null {
     tenantId: role === "KICK_ADMIN" ? null : process.env.DEV_BYPASS_TENANT_ID || null,
     role,
     locationId: process.env.DEV_BYPASS_LOCATION_ID || null,
+    storeRole: (process.env.DEV_BYPASS_STORE_ROLE as RequestContext["storeRole"]) || null,
     userId: "dev-bypass-user",
   };
 }

@@ -1,5 +1,6 @@
 import { OrderStatus } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
+import { authPrisma } from "@/server/db/authClient";
 import { HttpError } from "@/server/modules/identity/errors";
 import type { AdminListQuery } from "@/lib/adminQuery";
 
@@ -9,7 +10,12 @@ const netRevenue = (o: { subtotalCents: number; refundedCents: number }) => o.su
 export type StoreRow = {
   id: string;
   name: string;
+  storeCode: string | null;
   address: string | null;
+  phone: string | null;
+  email: string | null;
+  managerName: string | null;
+  managerEmail: string | null;
   status: string;
   brandName: string;
   brandSlug: string;
@@ -54,7 +60,12 @@ export async function listStores(ctx: RequestContext, q: AdminListQuery): Promis
     const rows: StoreRow[] = locations.map((l) => ({
       id: l.id,
       name: l.name,
+      storeCode: l.storeCode,
       address: l.address,
+      phone: l.phone,
+      email: l.email,
+      managerName: l.managerName,
+      managerEmail: l.managerEmail,
       status: l.status,
       brandName: l.tenant.name,
       brandSlug: l.tenant.slug,
@@ -84,13 +95,36 @@ export async function getStoreKpis(ctx: RequestContext): Promise<StoreKpis> {
 
 export type StoreDetail = {
   id: string;
+  tenantId: string;
   name: string;
+  storeCode: string | null;
   address: string | null;
+  addressLine1: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostalCode: string | null;
+  addressCountry: string | null;
+  phone: string | null;
+  email: string | null;
+  managerName: string | null;
+  managerEmail: string | null;
+  managerPhone: string | null;
   status: string;
   createdAt: Date;
   brandName: string;
   brandSlug: string;
-  members: Array<{ id: string; displayName: string | null; email: string | null; role: string }>;
+  members: Array<{
+    id: string;
+    userId: string;
+    displayName: string | null;
+    email: string | null;
+    phone: string | null;
+    role: string;
+    storeRole: string | null;
+    isActive: boolean;
+    lastLoginAt: Date | null;
+    createdAt: Date;
+  }>;
   recentOrders: Array<{ id: string; status: string; subtotalCents: number; createdAt: Date }>;
   orderCount: number;
   revenueCents: number;
@@ -112,15 +146,53 @@ export async function getStoreById(ctx: RequestContext, id: string): Promise<Sto
     const allOrders = await tx.order.findMany({ where: { locationId: id }, select: { status: true, subtotalCents: true, refundedCents: true } });
     const revenueCents = allOrders.filter((o) => PAID.includes(o.status)).reduce((s, o) => s + netRevenue(o), 0);
 
+    // Membership only holds role/scope — account status, phone, and last
+    // login live on User (a separate deny-all-RLS table), so members are
+    // joined here rather than read purely off the Membership row.
+    const userIds = l.memberships.map((m) => m.clerkUserId);
+    const users = userIds.length
+      ? await authPrisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, phone: true, isActive: true, lastLoginAt: true, createdAt: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
     return {
       id: l.id,
+      tenantId: l.tenantId,
       name: l.name,
+      storeCode: l.storeCode,
       address: l.address,
+      addressLine1: l.addressLine1,
+      addressCity: l.addressCity,
+      addressState: l.addressState,
+      addressPostalCode: l.addressPostalCode,
+      addressCountry: l.addressCountry,
+      phone: l.phone,
+      email: l.email,
+      managerName: l.managerName,
+      managerEmail: l.managerEmail,
+      managerPhone: l.managerPhone,
       status: l.status,
       createdAt: l.createdAt,
       brandName: l.tenant.name,
       brandSlug: l.tenant.slug,
-      members: l.memberships.map((m) => ({ id: m.id, displayName: m.displayName, email: m.email, role: m.role })),
+      members: l.memberships.map((m) => {
+        const u = userMap.get(m.clerkUserId);
+        return {
+          id: m.id,
+          userId: m.clerkUserId,
+          displayName: m.displayName,
+          email: m.email,
+          phone: u?.phone ?? null,
+          role: m.role,
+          storeRole: m.storeRole,
+          isActive: u?.isActive ?? true,
+          lastLoginAt: u?.lastLoginAt ?? null,
+          createdAt: u?.createdAt ?? m.createdAt,
+        };
+      }),
       recentOrders: l.orders.map((o) => ({ id: o.id, status: o.status, subtotalCents: o.subtotalCents, createdAt: o.createdAt })),
       orderCount: allOrders.length,
       revenueCents,

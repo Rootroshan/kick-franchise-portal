@@ -36,8 +36,10 @@ import { cn } from "@/lib/utils";
 export type StoreRow = {
   id: string;
   name: string;
+  storeCode: string | null;
   address: string | null;
   phone: string | null;
+  email: string | null;
   status: string;
   managerName: string | null;
   managerEmail: string | null;
@@ -434,6 +436,23 @@ function StoreRowMenu({
   );
 }
 
+/**
+ * Store fields not carried by StoreRow (the list-display shape) but required
+ * to create/edit one — structured address and manager phone are write-only
+ * from this form's perspective; StoreRow only needs what the table displays.
+ */
+type StoreFormExtra = {
+  storeCode: string;
+  addressLine1: string;
+  addressCity: string;
+  addressState: string;
+  addressPostalCode: string;
+  addressCountry: string;
+  managerName: string;
+  managerEmail: string;
+  managerPhone: string;
+};
+
 function StoreForm({
   title,
   store,
@@ -449,10 +468,21 @@ function StoreForm({
 }) {
   const [form, setForm] = useState({
     name: store?.name ?? "",
-    address: store?.address ?? "",
+    storeCode: store?.storeCode ?? "",
+    addressLine1: "",
+    addressCity: "",
+    addressState: "",
+    addressPostalCode: "",
+    addressCountry: "",
     phone: store?.phone ?? "",
+    email: store?.email ?? "",
+    managerName: store?.managerName ?? "",
+    managerEmail: store?.managerEmail ?? "",
+    managerPhone: "",
     status: store?.status ?? "active",
-  });
+  } satisfies { name: string; phone: string; email: string; status: string } & StoreFormExtra);
+
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   return (
     <Modal title={title} onClose={onCancel}>
@@ -464,17 +494,63 @@ function StoreForm({
         className="flex flex-col gap-3"
         noValidate
       >
-        <Labelled label="Store name">
-          <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} disabled={pending} required />
+        <div className="grid grid-cols-2 gap-3">
+          <Labelled label="Store name" required>
+            <input value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+          <Labelled label="Store number / code" required>
+            <input value={form.storeCode} onChange={(e) => set("storeCode", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+        </div>
+
+        <Labelled label="Street address" required>
+          <input value={form.addressLine1} onChange={(e) => set("addressLine1", e.target.value)} className={inputCls} disabled={pending} required />
         </Labelled>
-        <Labelled label="Address">
-          <input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className={inputCls} disabled={pending} />
-        </Labelled>
-        <Labelled label="Phone">
-          <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} disabled={pending} />
-        </Labelled>
+        <div className="grid grid-cols-2 gap-3">
+          <Labelled label="City" required>
+            <input value={form.addressCity} onChange={(e) => set("addressCity", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+          <Labelled label="State / Province" required>
+            <input value={form.addressState} onChange={(e) => set("addressState", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Labelled label="Postal code" required>
+            <input value={form.addressPostalCode} onChange={(e) => set("addressPostalCode", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+          <Labelled label="Country" required>
+            <input value={form.addressCountry} onChange={(e) => set("addressCountry", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Labelled label="Store phone" required>
+            <input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+          <Labelled label="Store email" required>
+            <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputCls} disabled={pending} required />
+          </Labelled>
+        </div>
+
+        <div className="mt-1 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-semibold text-muted-foreground">Store manager / main contact</p>
+          <div className="flex flex-col gap-3">
+            <Labelled label="Manager name" required>
+              <input value={form.managerName} onChange={(e) => set("managerName", e.target.value)} className={inputCls} disabled={pending} required />
+            </Labelled>
+            <div className="grid grid-cols-2 gap-3">
+              <Labelled label="Manager email" required>
+                <input type="email" value={form.managerEmail} onChange={(e) => set("managerEmail", e.target.value)} className={inputCls} disabled={pending} required />
+              </Labelled>
+              <Labelled label="Manager phone" required>
+                <input type="tel" value={form.managerPhone} onChange={(e) => set("managerPhone", e.target.value)} className={inputCls} disabled={pending} required />
+              </Labelled>
+            </div>
+          </div>
+        </div>
+
         <Labelled label="Status">
-          <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={inputCls} disabled={pending}>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)} className={inputCls} disabled={pending}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
@@ -530,10 +606,13 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
-function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
+function Labelled({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <label className="flex flex-col gap-1.5 text-sm font-medium">
-      {label}
+      <span>
+        {label}
+        {required && <span className="text-status-error"> *</span>}
+      </span>
       {children}
     </label>
   );

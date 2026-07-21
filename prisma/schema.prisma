@@ -73,6 +73,16 @@ enum DomainStatus {
   FAILED
 }
 
+/// Distinguishes elevated in-store permissions from a plain store user within
+/// the single FRANCHISEE_USER role — added instead of a new Role value so
+/// existing role-based checks (KICK_ADMIN/FRANCHISOR_ADMIN/FRANCHISEE_USER)
+/// keep working unchanged; this only refines what a FRANCHISEE_USER can do
+/// inside their own assigned store.
+enum StoreRole {
+  MANAGER
+  USER
+}
+
 enum RebateReportPeriod {
   MONTHLY
   QUARTERLY
@@ -107,7 +117,20 @@ model Tenant {
   /// Brand contact details, shown on Brand Detail. All nullable: brands
   /// created before these existed have none, and none is a valid state.
   tagline    String?
+  /// Legal/registered business name, when different from the public brand name.
+  legalName  String?
+  /// Franchisor owner/primary contact — distinct from Membership rows, which
+  /// are login accounts. This is the human name for the brand relationship
+  /// (e.g. "who do we call"), even before any FRANCHISOR_ADMIN account exists.
+  contactName String?
   hqAddress  String?
+  /// Structured headquarters address, additive alongside hqAddress (kept as
+  /// a free-text display fallback for brands created before these existed).
+  addressLine1 String?
+  addressCity  String?
+  addressState String?
+  addressPostalCode String?
+  addressCountry    String?
   phone      String?
   email      String?
   website    String?
@@ -151,10 +174,28 @@ model Location {
   id        String   @id @default(uuid())
   tenantId  String
   name      String
+  /// Operator-assigned store number/code (e.g. "TOR-001"). Unique per tenant,
+  /// not globally — two different brands may reuse the same code scheme.
+  storeCode String?
   address   String?
+  /// Structured address, additive alongside the free-text `address` (kept as
+  /// a display fallback for stores created before these existed).
+  addressLine1      String?
+  addressCity       String?
+  addressState      String?
+  addressPostalCode String?
+  addressCountry    String?
   /// Store contact number. Nullable — stores created before this existed have
   /// none, and a store without a listed phone is valid.
   phone     String?
+  email     String?
+  /// Manager contact fields are separate from Membership so a store can
+  /// record who to reach even before that person's account exists (or after
+  /// their account is removed) — see StoresPanel's comment on why the
+  /// UI-derived "manager" (any FRANCHISOR_ADMIN member) was insufficient.
+  managerName  String?
+  managerEmail String?
+  managerPhone String?
   status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -169,6 +210,7 @@ model Location {
   announcementAcks   AnnouncementAck[]
   notifications      Notification[]
 
+  @@unique([tenantId, storeCode])
   @@index([tenantId])
 }
 
@@ -178,6 +220,10 @@ model Membership {
   tenantId    String?
   locationId  String?
   role        Role
+  /// Only meaningful when role = FRANCHISEE_USER and locationId is set: a
+  /// MANAGER can manage other users within their own store; a plain USER
+  /// cannot. Null for KICK_ADMIN/FRANCHISOR_ADMIN, where it has no meaning.
+  storeRole   StoreRole?
   displayName String?
   email       String?
   createdAt   DateTime @default(now())

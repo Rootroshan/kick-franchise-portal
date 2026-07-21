@@ -105,9 +105,16 @@ export function CreateUserDialog({ brandOptions }: { brandOptions: Option[] }) {
                 <select value={form.role} onChange={(e) => set("role", e.target.value)} className={inputCls} disabled={pending}>
                   <option value="KICK_ADMIN">Super Admin</option>
                   <option value="FRANCHISOR_ADMIN">Franchisor Admin</option>
-                  <option value="FRANCHISEE_USER">Franchisee User</option>
                 </select>
               </Labelled>
+              {/* Franchisee (store-level) users are deliberately not creatable
+                  here — a FRANCHISEE_USER account requires a specific store
+                  assignment, and this dialog has no store context. They are
+                  only ever created from that store's own detail page
+                  (Brands → Brand → Stores → Store → Team → Add User). */}
+              <p className="-mt-1 text-xs text-muted-foreground">
+                To create a franchisee (store-level) user, open their store&rsquo;s page and add them under Team.
+              </p>
 
               {form.role !== "KICK_ADMIN" && (
                 <Labelled label="Brand access">

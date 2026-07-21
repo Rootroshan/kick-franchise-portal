@@ -8,15 +8,20 @@ import { withTenant, type RequestContext } from "@/server/db/withTenant";
  */
 
 export function kickCtx(): RequestContext {
-  return { tenantId: null, role: "KICK_ADMIN", locationId: null, userId: "test-kick-admin" };
+  return { tenantId: null, role: "KICK_ADMIN", locationId: null, storeRole: null, userId: "test-kick-admin" };
 }
 
 export function franchisorCtx(tenantId: string): RequestContext {
-  return { tenantId, role: "FRANCHISOR_ADMIN", locationId: null, userId: "test-franchisor" };
+  return { tenantId, role: "FRANCHISOR_ADMIN", locationId: null, storeRole: null, userId: "test-franchisor" };
 }
 
-export function franchiseeCtx(tenantId: string, locationId: string, userId = "test-franchisee"): RequestContext {
-  return { tenantId, role: "FRANCHISEE_USER", locationId, userId };
+export function franchiseeCtx(
+  tenantId: string,
+  locationId: string,
+  userId = "test-franchisee",
+  storeRole: RequestContext["storeRole"] = "USER"
+): RequestContext {
+  return { tenantId, role: "FRANCHISEE_USER", locationId, storeRole, userId };
 }
 
 /** Wipes all tenant-owned tables between tests. Runs as KICK_ADMIN via the privileged path (raw client, bypasses RLS via superuser DIRECT connection is NOT used here — deletes go through the app role, so KICK_ADMIN context is required). */

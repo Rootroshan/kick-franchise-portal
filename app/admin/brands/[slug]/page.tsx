@@ -1,17 +1,17 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Store, Users, ShoppingCart, DollarSign, Package, MapPin, Phone, Mail, Globe } from "lucide-react";
+import { ArrowLeft, Store, Users, ShoppingCart, DollarSign, Package, MapPin, Phone, Mail, Globe, User as UserIcon } from "lucide-react";
 import { parseTenantTheme } from "@/lib/theme";
 import { EditBrandDialog } from "@/components/admin/EditBrandDialog";
 import { requireRole } from "@/server/modules/identity/guard";
 import { getBrandBySlug } from "@/server/modules/tenants/brands";
-import { listCustomDomains, listMemberships } from "@/server/modules/tenants/service";
+import { listCustomDomains } from "@/server/modules/tenants/service";
 import { HttpError } from "@/server/modules/identity/errors";
 import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge } from "@/components/admin/kit";
 import { StoresPanel } from "@/components/admin/StoresPanel";
 import { DomainsPanel } from "@/components/admin/DomainsPanel";
-import { MembersPanel } from "@/components/admin/MembersPanel";
 import { FranchisorAdminsPanel } from "@/components/admin/FranchisorAdminsPanel";
 import { listFranchisorAdmins } from "./adminActions";
 
@@ -29,11 +29,12 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
   }
 
   // Interactive panels manage their own add-forms; feed them the initial rows.
-  const [domains, members, franchisorAdmins] = await Promise.all([
-    listCustomDomains(ctx, brand.id),
-    listMemberships(ctx, brand.id),
-    listFranchisorAdmins(brand.id),
-  ]);
+  const [domains, franchisorAdmins] = await Promise.all([listCustomDomains(ctx, brand.id), listFranchisorAdmins(brand.id)]);
+
+  const theme = parseTenantTheme(brand.theme);
+  // A brand's overall domain status is its most-advanced domain, or "Not
+  // configured" when none exists yet — matches the badge shown in Brands list.
+  const domainStatus = domains.length === 0 ? null : domains.some((d) => d.status === "VERIFIED") ? "VERIFIED" : domains[0]!.status;
 
   return (
     <div>
@@ -42,9 +43,35 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
       </Link>
 
       <PageHeader
-        title={brand.name}
+        title={
+          <span className="flex items-center gap-3">
+            {theme.logoUrl ? (
+              <Image
+                src={theme.logoUrl}
+                alt={`${brand.name} logo`}
+                width={40}
+                height={40}
+                className="h-10 w-10 shrink-0 rounded-lg border border-border object-contain"
+                unoptimized
+              />
+            ) : (
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
+                style={{ backgroundColor: theme.primary }}
+              >
+                {brand.name.charAt(0).toUpperCase()}
+              </span>
+            )}
+            {brand.name}
+          </span>
+        }
         description={`${brand.slug} · Created ${brand.createdAt.toLocaleDateString("en-CA", { day: "2-digit", month: "short", year: "numeric" })} · ID ${brand.id.slice(0, 8).toUpperCase()}`}
-        secondaryAction={<StatusBadge status={brand.status} />}
+        secondaryAction={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={brand.status} />
+            {domainStatus && <StatusBadge status={domainStatus} />}
+          </div>
+        }
         action={
           <EditBrandDialog
             brand={{
@@ -55,7 +82,7 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
               phone: brand.phone,
               email: brand.email,
               website: brand.website,
-              logoUrl: parseTenantTheme(brand.theme).logoUrl,
+              logoUrl: theme.logoUrl,
             }}
           />
         }
@@ -66,10 +93,11 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
       <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold">Brand information</h2>
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-          <InfoField icon={MapPin} label="Headquarters" value={brand.hqAddress} />
+          <InfoField icon={UserIcon} label="Franchisor contact" value={brand.contactName} />
           <InfoField icon={Phone} label="Main phone" value={brand.phone} />
           <InfoField icon={Mail} label="Main email" value={brand.email} />
           <InfoField icon={Globe} label="Website" value={brand.website} href={brand.website} />
+          <InfoField icon={MapPin} label="Headquarters" value={brand.hqAddress} />
         </dl>
       </div>
 
@@ -100,14 +128,11 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
           </div>
 
           {/* Franchisor admins get their own section: creating one here pins
-              role and tenant server-side, unlike the general Members panel. */}
+              role and tenant server-side. Franchisee users are deliberately
+              NOT manageable from here — they belong to one store, so they are
+              only ever added from that store's own detail page. */}
           <div className="min-w-0 rounded-xl border border-border bg-card p-4">
             <FranchisorAdminsPanel tenantId={brand.id} slug={brand.slug} admins={franchisorAdmins} />
-          </div>
-
-          <div className="min-w-0 rounded-xl border border-border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">All Members</h2>
-            <MembersPanel tenantId={brand.id} initialMembers={members} />
           </div>
         </section>
 

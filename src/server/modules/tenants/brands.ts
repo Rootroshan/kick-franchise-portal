@@ -134,25 +134,30 @@ export async function getBrandKpis(ctx: RequestContext): Promise<BrandKpis> {
 export type BrandDetail = {
   id: string;
   name: string;
+  legalName: string | null;
   slug: string;
   status: string;
   createdAt: Date;
   theme: Record<string, unknown>;
   tagline: string | null;
+  contactName: string | null;
   hqAddress: string | null;
+  addressLine1: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostalCode: string | null;
+  addressCountry: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
-  /**
-   * Stores with their manager and member count. Manager is derived from
-   * Membership rather than stored on Location: a store's manager IS a member
-   * assigned to it, so duplicating the name would let the two disagree.
-   */
+  /** Stores with their manager, contact info, and member count. */
   stores: Array<{
     id: string;
     name: string;
+    storeCode: string | null;
     address: string | null;
     phone: string | null;
+    email: string | null;
     status: string;
     managerName: string | null;
     managerEmail: string | null;
@@ -213,8 +218,15 @@ export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise
 
     return {
       tagline: t.tagline,
+      legalName: t.legalName,
+      contactName: t.contactName,
       activity,
       hqAddress: t.hqAddress,
+      addressLine1: t.addressLine1,
+      addressCity: t.addressCity,
+      addressState: t.addressState,
+      addressPostalCode: t.addressPostalCode,
+      addressCountry: t.addressCountry,
       phone: t.phone,
       email: t.email,
       website: t.website,
@@ -226,17 +238,20 @@ export async function getBrandBySlug(ctx: RequestContext, slug: string): Promise
       theme: (t.theme as Record<string, unknown>) ?? {},
       stores: t.locations.map((l) => {
         const staff = byLocation.get(l.id) ?? [];
-        // A store's "manager" is its franchisor-level member if one is
-        // assigned there, otherwise the first member — never a stored copy.
+        // Prefer the store's own recorded manager contact; fall back to the
+        // franchisor-level member assigned there for stores created before
+        // Location had its own manager fields.
         const manager = staff.find((m) => m.role === "FRANCHISOR_ADMIN") ?? staff[0];
         return {
           id: l.id,
           name: l.name,
+          storeCode: l.storeCode,
           address: l.address,
           phone: l.phone,
+          email: l.email,
           status: l.status,
-          managerName: manager?.displayName ?? null,
-          managerEmail: manager?.email ?? null,
+          managerName: l.managerName ?? manager?.displayName ?? null,
+          managerEmail: l.managerEmail ?? manager?.email ?? null,
           memberCount: staff.length,
         };
       }),

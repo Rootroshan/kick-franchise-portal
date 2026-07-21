@@ -36,6 +36,7 @@ export async function getRequestContext(): Promise<RequestContext> {
       tenantId: resolvedTenant?.id ?? null,
       role: "KICK_ADMIN",
       locationId: null,
+      storeRole: null,
       userId,
     };
   }
@@ -53,6 +54,7 @@ export async function getRequestContext(): Promise<RequestContext> {
     tenantId: resolvedTenant.id,
     role: membership.role,
     locationId: membership.locationId,
+    storeRole: membership.storeRole,
     userId,
   };
 }

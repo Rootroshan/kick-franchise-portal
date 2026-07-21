@@ -1,11 +1,13 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./client";
-import type { Role } from "@prisma/client";
+import type { Role, StoreRole } from "@prisma/client";
 
 export type RequestContext = {
   tenantId: string | null;
   role: Role;
   locationId: string | null;
+  /** Only meaningful when role is FRANCHISEE_USER — see schema comment on Membership.storeRole. */
+  storeRole: StoreRole | null;
   userId: string;
 };
 
@@ -59,5 +61,5 @@ export async function withTenant<T>(
 
 /** Context for background jobs that must act with Kick-level authority. */
 export function systemKickContext(): RequestContext {
-  return { tenantId: null, role: "KICK_ADMIN", locationId: null, userId: "system-worker" };
+  return { tenantId: null, role: "KICK_ADMIN", locationId: null, storeRole: null, userId: "system-worker" };
 }

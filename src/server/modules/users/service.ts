@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { Role, StoreRole } from "@prisma/client";
 import { authPrisma } from "@/server/db/authClient";
 import { withTenant } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
@@ -28,6 +28,7 @@ export type UserRow = {
   lastLoginAt: Date | null;
   createdAt: Date;
   role: Role | null;
+  storeRole: StoreRole | null;
   tenantId: string | null;
   tenantName: string | null;
   locationId: string | null;
@@ -140,6 +141,7 @@ async function attachMemberships(
       lastLoginAt: u.lastLoginAt,
       createdAt: u.createdAt,
       role: m?.role ?? null,
+      storeRole: m?.storeRole ?? null,
       tenantId: m?.tenantId ?? null,
       tenantName: m?.tenant?.name ?? null,
       locationId: m?.locationId ?? null,
@@ -174,6 +176,8 @@ export type CreateUserInput = {
   isActive: boolean;
   tenantId?: string | null;
   locationId?: string | null;
+  /** Only meaningful when role is FRANCHISEE_USER — see schema comment. */
+  storeRole?: StoreRole | null;
 };
 
 /**
@@ -211,6 +215,7 @@ export async function createUser(ctx: RequestContext, input: CreateUserInput): P
         tenantId,
         locationId: input.role === "KICK_ADMIN" ? null : (input.locationId ?? null),
         role: input.role,
+        storeRole: input.role === "FRANCHISEE_USER" ? (input.storeRole ?? "USER") : null,
         displayName: input.name.trim(),
         email,
       },
@@ -239,6 +244,7 @@ export type UpdateUserInput = {
   isActive?: boolean;
   tenantId?: string | null;
   locationId?: string | null;
+  storeRole?: StoreRole | null;
 };
 
 /**
@@ -301,7 +307,12 @@ export async function updateUser(ctx: RequestContext, id: string, input: UpdateU
   if (input.isActive === false) await authPrisma.session.deleteMany({ where: { userId: id } });
 
   await withTenant(ctx, async (tx) => {
-    if (input.role !== undefined || input.tenantId !== undefined || input.locationId !== undefined) {
+    if (
+      input.role !== undefined ||
+      input.tenantId !== undefined ||
+      input.locationId !== undefined ||
+      input.storeRole !== undefined
+    ) {
       const role = input.role ?? before.role ?? "FRANCHISEE_USER";
       const tenantId = role === "KICK_ADMIN" ? null : (input.tenantId ?? before.tenantId);
 
@@ -314,6 +325,7 @@ export async function updateUser(ctx: RequestContext, id: string, input: UpdateU
           tenantId,
           locationId: role === "KICK_ADMIN" ? null : (input.locationId ?? before.locationId),
           role,
+          storeRole: role === "FRANCHISEE_USER" ? (input.storeRole ?? before.storeRole ?? "USER") : null,
           displayName: input.name?.trim() ?? before.name,
           email: before.email,
         },
