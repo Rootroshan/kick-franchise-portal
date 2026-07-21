@@ -7,6 +7,7 @@ import { HttpError } from "@/server/modules/identity/errors";
 import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge, EmptyState } from "@/components/admin/kit";
 import { StoreUsersPanel } from "@/components/admin/StoreUsersPanel";
+import { listStoreUserInvitations } from "./userActions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export default async function StoreDetailPage({ params }: { params: { id: string
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   }
+
+  const invitations = await listStoreUserInvitations(store.tenantId, store.id);
 
   const structuredAddress = [store.addressLine1, store.addressCity, store.addressState, store.addressPostalCode, store.addressCountry]
     .filter(Boolean)
@@ -91,7 +94,7 @@ export default async function StoreDetailPage({ params }: { params: { id: string
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="min-w-0">
           <div className="min-w-0 rounded-xl border border-border bg-card p-4">
-            <StoreUsersPanel tenantId={store.tenantId} locationId={store.id} users={store.members} />
+            <StoreUsersPanel tenantId={store.tenantId} locationId={store.id} users={store.members} invitations={invitations} />
           </div>
         </section>
 

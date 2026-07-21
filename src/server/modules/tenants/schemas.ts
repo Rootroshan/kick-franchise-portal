@@ -17,6 +17,17 @@ const themeSchema = z.object({
 });
 
 /**
+ * Person-identity building blocks, reused across every place an admin
+ * creates or invites a real account (franchisor admin, store manager/user,
+ * generic platform user) — previously each of those had its own inline
+ * `z.string().trim().min(1)...` copy that could silently drift apart.
+ */
+export const personNameSchema = z.string().trim().min(1, "Enter a full name.").max(200);
+export const personEmailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
+export const personPhoneSchema = z.string().trim().max(50);
+export const passwordSchema = z.string().min(8, "Password must be at least 8 characters.");
+
+/**
  * Brand creation requires real franchisor contact info up front — a brand
  * cannot be created with only a name, since email/phone/address are how the
  * franchisor is actually reached and how a future invitation would be sent.

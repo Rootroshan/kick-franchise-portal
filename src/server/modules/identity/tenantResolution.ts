@@ -85,3 +85,37 @@ export function requireResolvedTenant(tenant: ResolvedTenant | null): ResolvedTe
   }
   return tenant;
 }
+
+export type HostDiagnosis =
+  | { kind: "unknown" }
+  | { kind: "pending_verification"; brandName: string }
+  | { kind: "tenant_inactive"; brandName: string };
+
+/**
+ * Distinguishes WHY a host didn't resolve, for the "not available" page to
+ * show the right message — a domain that's registered but not yet verified
+ * needs "DNS setup isn't finished," not the same generic message as a host
+ * nobody has ever heard of. Only ever called after resolveTenantFromHost()
+ * already returned null; never used to grant access.
+ */
+export async function diagnoseUnresolvedHost(host: string): Promise<HostDiagnosis> {
+  const hostname = host
+    .split(":")[0]
+    ?.toLowerCase()
+    .trim()
+    .replace(/^www\./, "");
+  if (!hostname) return { kind: "unknown" };
+
+  const custom = await withTenant(systemKickContext(), (tx) =>
+    tx.customDomain.findUnique({ where: { hostname }, include: { tenant: true } })
+  ).catch(() => null);
+
+  if (!custom) return { kind: "unknown" };
+  if (custom.tenant.status !== "active") return { kind: "tenant_inactive", brandName: custom.tenant.name };
+  if (custom.status !== "VERIFIED") return { kind: "pending_verification", brandName: custom.tenant.name };
+  // A CustomDomain row that's VERIFIED with an active tenant should have
+  // resolved successfully — reaching here means resolveTenantFromHost's own
+  // check disagreed (e.g. a race), which is unexpected but still "unknown"
+  // from the visitor's perspective rather than a state this function names.
+  return { kind: "unknown" };
+}

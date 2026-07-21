@@ -11,6 +11,7 @@ import {
   resetUserPassword,
   deleteUser,
 } from "@/server/modules/users/service";
+import { personNameSchema, personEmailSchema, personPhoneSchema } from "@/server/modules/tenants/schemas";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -80,9 +81,9 @@ export async function createUserAction(input: {
 
 /** Full edit payload. Zod validates shape; the service re-checks the rules. */
 const updateUserSchema = z.object({
-  name: z.string().trim().min(1, "Enter a full name.").max(200).optional(),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address.").optional(),
-  phone: z.string().trim().max(50).optional(),
+  name: personNameSchema.optional(),
+  email: personEmailSchema.optional(),
+  phone: personPhoneSchema.optional(),
   role: z.enum(["KICK_ADMIN", "FRANCHISOR_ADMIN", "FRANCHISEE_USER"]).optional(),
   isActive: z.boolean().optional(),
   tenantId: z.string().optional(),

@@ -13,7 +13,7 @@ import { PageHeader, KPIStatCard, StatusBadge } from "@/components/admin/kit";
 import { StoresPanel } from "@/components/admin/StoresPanel";
 import { DomainsPanel } from "@/components/admin/DomainsPanel";
 import { FranchisorAdminsPanel } from "@/components/admin/FranchisorAdminsPanel";
-import { listFranchisorAdmins } from "./adminActions";
+import { listFranchisorAdmins, listFranchisorAdminInvitations } from "./adminActions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,11 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
   }
 
   // Interactive panels manage their own add-forms; feed them the initial rows.
-  const [domains, franchisorAdmins] = await Promise.all([listCustomDomains(ctx, brand.id), listFranchisorAdmins(brand.id)]);
+  const [domains, franchisorAdmins, franchisorAdminInvitations] = await Promise.all([
+    listCustomDomains(ctx, brand.id),
+    listFranchisorAdmins(brand.id),
+    listFranchisorAdminInvitations(brand.id),
+  ]);
 
   const theme = parseTenantTheme(brand.theme);
   // A brand's overall domain status is its most-advanced domain, or "Not
@@ -132,7 +136,12 @@ export default async function BrandDetailPage({ params }: { params: { slug: stri
               NOT manageable from here — they belong to one store, so they are
               only ever added from that store's own detail page. */}
           <div className="min-w-0 rounded-xl border border-border bg-card p-4">
-            <FranchisorAdminsPanel tenantId={brand.id} slug={brand.slug} admins={franchisorAdmins} />
+            <FranchisorAdminsPanel
+              tenantId={brand.id}
+              slug={brand.slug}
+              admins={franchisorAdmins}
+              invitations={franchisorAdminInvitations}
+            />
           </div>
         </section>
 

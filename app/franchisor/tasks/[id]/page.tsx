@@ -6,6 +6,7 @@ import { getFranchisorTask } from "@/server/modules/tasks/franchisorList";
 import { HttpError } from "@/server/modules/identity/errors";
 import { PageHeader, StatusBadge } from "@/components/admin/kit";
 import { TaskReminderButton } from "@/components/franchisor/tasks/TaskReminderButton";
+import { TaskDeleteButton } from "@/components/franchisor/tasks/TaskDeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <TaskReminderButton id={t.id} openCount={openCount} />
+        <TaskDeleteButton id={t.id} title={t.title} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

@@ -739,3 +739,41 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  FAILED
+}
+
+/// An account invitation — issued for a brand's first FRANCHISOR_ADMIN, a
+/// store's initial Manager, or any FRANCHISEE_USER, before their User row
+/// exists. Lives alongside User/Account/Session/VerificationToken (deny-all
+/// RLS, authPrisma-only) rather than under withTenant(): the invitee has no
+/// Membership yet, so there is no tenant context to scope by, and the
+/// inviting KICK_ADMIN needs to see/manage these across every brand from one
+/// list regardless of which tenant they target.
+model Invitation {
+  id          String           @id @default(uuid())
+  email       String
+  displayName String
+  phone       String?
+  role        Role
+  storeRole   StoreRole?
+  tenantId    String?
+  locationId  String?
+  /// SHA-256 of the raw token — mirrors VerificationToken/passwordReset.ts;
+  /// the raw value exists only in the sent email, never stored.
+  tokenHash   String           @unique
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  invitedBy   String
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([email])
+  @@index([tenantId])
+  @@index([status])
+}

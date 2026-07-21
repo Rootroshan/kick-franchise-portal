@@ -12,6 +12,9 @@ const PUBLIC_PATTERNS: RegExp[] = [
   //
   // These must be public — no session exists yet when they load.
   /^\/forgot-password$/,
+  // Where an invited franchisor/store user sets their password to create
+  // their account. No session exists yet, same reasoning as forgot-password.
+  /^\/accept-invite$/,
   // Brand portal login. Public by necessity — it is where an unauthenticated
   // tenant user starts, and it resolves its own tenant from the Host header.
   /^\/portal-login$/,

@@ -5,6 +5,8 @@ import { z } from "zod";
 import { requireRole } from "@/server/modules/identity/guard";
 import { withTenant } from "@/server/db/withTenant";
 import { createUser, updateUser, setUserActive, resetUserPassword, deleteUser } from "@/server/modules/users/service";
+import { createInvitation, resendInvitation, listInvitations } from "@/server/auth/invitations";
+import { personNameSchema, personEmailSchema, personPhoneSchema, passwordSchema } from "@/server/modules/tenants/schemas";
 import { HttpError } from "@/server/modules/identity/errors";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -19,10 +21,10 @@ export type ActionResult = { ok: boolean; message: string };
  */
 
 const createSchema = z.object({
-  name: z.string().trim().min(1, "Enter a full name.").max(200),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-  phone: z.string().trim().max(50).optional(),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  name: personNameSchema,
+  email: personEmailSchema,
+  phone: personPhoneSchema.optional(),
+  password: passwordSchema,
   storeRole: z.enum(["MANAGER", "USER"]),
   isActive: z.boolean(),
 });
@@ -69,10 +71,61 @@ export async function createStoreUserAction(
   return { ok: true, message: "Store user created." };
 }
 
+const inviteSchema = z.object({
+  name: personNameSchema,
+  email: personEmailSchema,
+  phone: personPhoneSchema.optional(),
+  storeRole: z.enum(["MANAGER", "USER"]),
+});
+
+/** Sends an email invitation instead of setting a password directly — the account is created only on acceptance. */
+export async function inviteStoreUserAction(tenantId: string, locationId: string, input: unknown): Promise<ActionResult> {
+  const ctx = await requireRole("KICK_ADMIN")();
+
+  const parsed = inviteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
+
+  try {
+    await assertStoreBelongsToTenant(ctx, locationId, tenantId);
+    await createInvitation(ctx, {
+      displayName: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      role: "FRANCHISEE_USER",
+      storeRole: parsed.data.storeRole,
+      tenantId,
+      locationId,
+    });
+  } catch (err) {
+    return fail(err);
+  }
+
+  revalidatePath(`/admin/stores/${locationId}`);
+  return { ok: true, message: "Invitation sent." };
+}
+
+export async function resendStoreUserInvitationAction(invitationId: string, locationId: string): Promise<ActionResult> {
+  const ctx = await requireRole("KICK_ADMIN")();
+  try {
+    await resendInvitation(ctx, invitationId);
+  } catch (err) {
+    return fail(err);
+  }
+  revalidatePath(`/admin/stores/${locationId}`);
+  return { ok: true, message: "Invitation resent." };
+}
+
+/** Pending/expired/failed invitations for this store — accepted ones drop off since they now have a real User row shown in the store's member list. */
+export async function listStoreUserInvitations(tenantId: string, locationId: string) {
+  await requireRole("KICK_ADMIN")();
+  const all = await listInvitations(tenantId);
+  return all.filter((i) => i.role === "FRANCHISEE_USER" && i.status !== "ACCEPTED" && i.locationId === locationId);
+}
+
 const updateSchema = z.object({
-  name: z.string().trim().min(1).max(200).optional(),
-  email: z.string().trim().toLowerCase().email().optional(),
-  phone: z.string().trim().max(50).optional(),
+  name: personNameSchema.optional(),
+  email: personEmailSchema.optional(),
+  phone: personPhoneSchema.optional(),
   storeRole: z.enum(["MANAGER", "USER"]).optional(),
 });
 

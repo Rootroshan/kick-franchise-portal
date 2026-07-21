@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import Image from "next/image";
-import { AlertTriangle } from "lucide-react";
-import { resolveTenantFromHost } from "@/server/modules/identity/tenantResolution";
+import { AlertTriangle, Clock } from "lucide-react";
+import { resolveTenantFromHost, diagnoseUnresolvedHost } from "@/server/modules/identity/tenantResolution";
 import { parseTenantTheme } from "@/lib/theme";
 import { PortalLoginForm } from "@/components/auth/PortalLoginForm";
 
@@ -16,8 +16,11 @@ export const dynamic = "force-dynamic";
  * brand is hard-coded and a client cannot aim the page at another tenant.
  *
  * Unknown hosts, unverified domains and inactive tenants all resolve to null
- * and render the notice below rather than a login form: offering a form for a
- * brand that does not exist would invite credential stuffing against it.
+ * and render a notice rather than a login form: offering a form for a brand
+ * that does not exist would invite credential stuffing against it. The
+ * message differs by WHY it failed (diagnoseUnresolvedHost) purely for
+ * clarity to whoever is looking at the domain — it never grants access; the
+ * access decision is entirely resolveTenantFromHost's null/non-null result.
  */
 export default async function PortalLoginPage() {
   // x-kick-host first: the middleware rewrites the custom domain root to this
@@ -28,6 +31,26 @@ export default async function PortalLoginPage() {
   const tenant = await resolveTenantFromHost(host);
 
   if (!tenant) {
+    const diagnosis = await diagnoseUnresolvedHost(host);
+
+    if (diagnosis.kind === "pending_verification") {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-app-bg p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-status-info/10">
+              <Clock className="h-5 w-5 text-status-info" aria-hidden="true" />
+            </span>
+            <h1 className="text-lg font-semibold">Domain setup in progress</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              <strong className="text-foreground">{diagnosis.brandName}</strong>&rsquo;s portal domain is registered but
+              hasn&rsquo;t finished DNS verification yet. This usually resolves within a few minutes of the DNS records
+              being added — check back shortly, or contact your brand administrator if this persists.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-app-bg p-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
@@ -36,8 +59,9 @@ export default async function PortalLoginPage() {
           </span>
           <h1 className="text-lg font-semibold">Portal not available</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            This portal address is not recognised, or its domain has not finished verification. Check the web address,
-            or contact your brand administrator.
+            {diagnosis.kind === "tenant_inactive"
+              ? `${diagnosis.brandName}'s portal is not currently active. Contact your brand administrator.`
+              : "This portal address is not recognised. Check the web address, or contact your brand administrator."}
           </p>
         </div>
       </div>

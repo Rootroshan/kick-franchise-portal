@@ -2,14 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, X, AlertCircle, Trash2, KeyRound, Pencil, PauseCircle, PlayCircle } from "lucide-react";
+import { Plus, Loader2, X, AlertCircle, Trash2, KeyRound, Pencil, PauseCircle, PlayCircle, Mail, RotateCw } from "lucide-react";
 import {
   createStoreUserAction,
   updateStoreUserAction,
   setStoreUserActiveAction,
   resetStoreUserPasswordAction,
   deleteStoreUserAction,
+  inviteStoreUserAction,
+  resendStoreUserInvitationAction,
 } from "@/app/admin/stores/[id]/userActions";
+import type { InvitationRow } from "@/server/auth/invitations";
 import { cn } from "@/lib/utils";
 
 export type StoreUserRow = {
@@ -24,24 +27,36 @@ export type StoreUserRow = {
   createdAt: Date;
 };
 
+const INVITE_STATUS_VARIANT: Record<InvitationRow["status"], string> = {
+  PENDING: "bg-status-warning/15 text-status-warning",
+  ACCEPTED: "bg-status-success/15 text-status-success",
+  EXPIRED: "bg-muted text-muted-foreground",
+  FAILED: "bg-status-error/15 text-status-error",
+};
+
 /**
  * Franchisee users for one store.
  *
  * Every action posts to a store-scoped server action that pins role to
  * FRANCHISEE_USER and both tenant and location to this store, so nothing
  * here can create a platform/franchisor admin or attach a user elsewhere.
+ * An operator can either set a password directly (useful when email isn't
+ * configured) or send an invitation the invitee accepts by setting their
+ * own password.
  */
 export function StoreUsersPanel({
   tenantId,
   locationId,
   users,
+  invitations,
 }: {
   tenantId: string;
   locationId: string;
   users: StoreUserRow[];
+  invitations: InvitationRow[];
 }) {
   const router = useRouter();
-  const [dialog, setDialog] = useState<{ kind: "create" | "edit" | "reset" | "delete"; user?: StoreUserRow } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: "create" | "invite" | "edit" | "reset" | "delete"; user?: StoreUserRow } | null>(null);
   const [banner, setBanner] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -60,14 +75,57 @@ export function StoreUsersPanel({
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">Team</h2>
-        <button
-          onClick={() => setDialog({ kind: "create" })}
-          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md bg-status-info px-3 text-xs font-semibold text-white hover:opacity-95"
-        >
-          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          Add User
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setDialog({ kind: "invite" })}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-semibold hover:bg-muted"
+          >
+            <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+            Invite
+          </button>
+          <button
+            onClick={() => setDialog({ kind: "create" })}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-status-info px-3 text-xs font-semibold text-white hover:opacity-95"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Add User
+          </button>
+        </div>
       </div>
+
+      {invitations.length > 0 && (
+        <div className="mb-4 rounded-lg border border-border">
+          <p className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+            Invitations
+          </p>
+          <ul className="divide-y divide-border">
+            {invitations.map((inv) => (
+              <li key={inv.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">{inv.displayName}</div>
+                  <div className="truncate text-xs text-muted-foreground">{inv.email}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", INVITE_STATUS_VARIANT[inv.status])}>
+                    {inv.status[0]}{inv.status.slice(1).toLowerCase()}
+                  </span>
+                  {inv.status !== "ACCEPTED" && (
+                    <button
+                      onClick={() => run(() => resendStoreUserInvitationAction(inv.id, locationId))}
+                      disabled={pending}
+                      title="Resend invitation"
+                      aria-label="Resend invitation"
+                      className="rounded-md border border-border p-1.5 hover:bg-muted disabled:opacity-60"
+                    >
+                      <RotateCw className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {banner && (
         <div
@@ -160,6 +218,14 @@ export function StoreUsersPanel({
           pending={pending}
           onCancel={() => setDialog(null)}
           onSubmit={(data) => run(() => createStoreUserAction(tenantId, locationId, data))}
+        />
+      )}
+
+      {dialog?.kind === "invite" && (
+        <InviteDialog
+          pending={pending}
+          onCancel={() => setDialog(null)}
+          onSubmit={(data) => run(() => inviteStoreUserAction(tenantId, locationId, data))}
         />
       )}
 
@@ -278,6 +344,52 @@ function CreateDialog({
 
         {error && <ErrorLine message={error} />}
         <Actions pending={pending} onCancel={onCancel} label="Create user" />
+      </form>
+    </Modal>
+  );
+}
+
+function InviteDialog({
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (data: Record<string, unknown>) => void;
+}) {
+  const [form, setForm] = useState({ name: "", email: "", phone: "", storeRole: "USER" });
+
+  return (
+    <Modal title="Invite store user" onClose={onCancel}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(form);
+        }}
+        className="flex flex-col gap-3"
+        noValidate
+      >
+        <p className="text-xs text-muted-foreground">
+          Sends an email with a link to set up their account. No password is set here.
+        </p>
+        <Labelled label="Full name">
+          <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} disabled={pending} required />
+        </Labelled>
+        <Labelled label="Email">
+          <input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className={inputCls} disabled={pending} required autoComplete="off" />
+        </Labelled>
+        <Labelled label="Phone">
+          <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} disabled={pending} required />
+        </Labelled>
+        <Labelled label="Access level">
+          <select value={form.storeRole} onChange={(e) => setForm((f) => ({ ...f, storeRole: e.target.value }))} className={inputCls} disabled={pending}>
+            <option value="USER">User — no team management</option>
+            <option value="MANAGER">Manager — can manage this store&rsquo;s team</option>
+          </select>
+        </Labelled>
+
+        <Actions pending={pending} onCancel={onCancel} label="Send invitation" />
       </form>
     </Modal>
   );

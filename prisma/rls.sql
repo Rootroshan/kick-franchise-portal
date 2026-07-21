@@ -613,3 +613,12 @@ ALTER TABLE "VerificationToken" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "VerificationToken" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS verification_token_deny_all ON "VerificationToken";
 CREATE POLICY verification_token_deny_all ON "VerificationToken" FOR ALL USING (false) WITH CHECK (false);
+
+-- Invitation: same reasoning as VerificationToken — the invitee has no
+-- Membership yet (no tenant context to scope by), and the tokenHash must
+-- never be readable through a tenant-scoped query path. Only authPrisma
+-- (DIRECT_URL, superuser) touches this table.
+ALTER TABLE "Invitation" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Invitation" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS invitation_deny_all ON "Invitation";
+CREATE POLICY invitation_deny_all ON "Invitation" FOR ALL USING (false) WITH CHECK (false);

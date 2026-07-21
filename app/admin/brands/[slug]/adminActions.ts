@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/server/modules/identity/guard";
 import { createUser, updateUser, setUserActive, resetUserPassword, deleteUser, listUsers } from "@/server/modules/users/service";
+import { createInvitation, resendInvitation, listInvitations } from "@/server/auth/invitations";
+import { personNameSchema, personEmailSchema, personPhoneSchema, passwordSchema } from "@/server/modules/tenants/schemas";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -21,10 +23,10 @@ export type ActionResult = { ok: boolean; message: string };
  */
 
 const createSchema = z.object({
-  name: z.string().trim().min(1, "Enter a full name.").max(200),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-  phone: z.string().trim().max(50).optional(),
-  password: z.string().min(8, "Password must be at least 8 characters."),
+  name: personNameSchema,
+  email: personEmailSchema,
+  phone: personPhoneSchema.optional(),
+  password: passwordSchema,
   isActive: z.boolean(),
 });
 
@@ -55,10 +57,57 @@ export async function createFranchisorAdminAction(tenantId: string, slug: string
   return { ok: true, message: "Franchisor admin created." };
 }
 
+const inviteSchema = z.object({
+  name: personNameSchema,
+  email: personEmailSchema,
+  phone: personPhoneSchema.optional(),
+});
+
+/** Sends an email invitation instead of setting a password directly — the account is created only on acceptance. */
+export async function inviteFranchisorAdminAction(tenantId: string, slug: string, input: unknown): Promise<ActionResult> {
+  const ctx = await requireRole("KICK_ADMIN")();
+
+  const parsed = inviteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
+
+  try {
+    await createInvitation(ctx, {
+      displayName: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      role: "FRANCHISOR_ADMIN",
+      tenantId,
+    });
+  } catch (err) {
+    return fail(err);
+  }
+
+  revalidatePath(`/admin/brands/${slug}`);
+  return { ok: true, message: "Invitation sent." };
+}
+
+export async function resendFranchisorAdminInvitationAction(invitationId: string, slug: string): Promise<ActionResult> {
+  const ctx = await requireRole("KICK_ADMIN")();
+  try {
+    await resendInvitation(ctx, invitationId);
+  } catch (err) {
+    return fail(err);
+  }
+  revalidatePath(`/admin/brands/${slug}`);
+  return { ok: true, message: "Invitation resent." };
+}
+
+/** Pending/expired/failed invitations for this brand's franchisor admins — accepted ones drop off since they now have a real User row shown by listFranchisorAdmins. */
+export async function listFranchisorAdminInvitations(tenantId: string) {
+  await requireRole("KICK_ADMIN")();
+  const all = await listInvitations(tenantId);
+  return all.filter((i) => i.role === "FRANCHISOR_ADMIN" && i.status !== "ACCEPTED");
+}
+
 const updateSchema = z.object({
-  name: z.string().trim().min(1).max(200).optional(),
-  email: z.string().trim().toLowerCase().email().optional(),
-  phone: z.string().trim().max(50).optional(),
+  name: personNameSchema.optional(),
+  email: personEmailSchema.optional(),
+  phone: personPhoneSchema.optional(),
 });
 
 export async function updateFranchisorAdminAction(userId: string, slug: string, input: unknown): Promise<ActionResult> {

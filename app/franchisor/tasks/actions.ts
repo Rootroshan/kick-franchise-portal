@@ -57,6 +57,44 @@ export async function updateTaskAction(id: string, formData: FormData) {
   redirect(`/franchisor/tasks/${id}`);
 }
 
+/**
+ * Deletes a task. Refused if any store has already completed it — that
+ * completion record (who finished it, when) is history the same way an
+ * order or allowance grant is, and Task→TaskAssignment cascades on delete,
+ * so removing the Task would silently destroy it. A task with only OPEN
+ * assignments (nobody has acted on it yet) is safe to remove outright.
+ */
+export async function deleteTaskAction(id: string) {
+  const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
+
+  await withTenant(ctx, async (tx) => {
+    const task = await tx.task.findFirst({ where: { id, tenantId: ctx.tenantId }, include: { assignments: true } });
+    if (!task) throw new HttpError(404, "Task not found");
+
+    const completed = task.assignments.filter((a) => a.status === "COMPLETED").length;
+    if (completed > 0) {
+      throw new HttpError(
+        409,
+        `${completed} store${completed === 1 ? " has" : "s have"} already completed this task. Its record can't be deleted.`
+      );
+    }
+
+    await writeAuditLog(tx, {
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      role: ctx.role,
+      action: "task.delete",
+      entity: "Task",
+      entityId: id,
+      before: { title: task.title },
+    });
+    await tx.task.delete({ where: { id } });
+  });
+
+  revalidatePath("/franchisor/tasks");
+  redirect("/franchisor/tasks");
+}
+
 /** Send a reminder for a task's open assignments (records audit; delivery is handled by the worker). */
 export async function sendReminderAction(id: string) {
   const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
