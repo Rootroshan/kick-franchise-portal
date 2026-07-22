@@ -49,16 +49,3 @@ export async function getNotificationsOverview(ctx: RequestContext): Promise<Not
     };
   });
 }
-
-/** Badge count for the sidebar: failed pushes + operational signals needing attention. */
-export async function getNotificationBadgeCount(ctx: RequestContext): Promise<number> {
-  return withTenant(ctx, async (tx) => {
-    const now = new Date();
-    const [failed, tasks] = await Promise.all([
-      tx.pushSubscription.count({ where: { status: "FAILED" } }),
-      tx.task.findMany({ where: { dueAt: { lt: now } }, select: { assignments: { select: { status: true } } } }),
-    ]);
-    const overdue = tasks.filter((t) => t.assignments.length > 0 && t.assignments.some((a) => a.status !== "COMPLETED")).length;
-    return failed + overdue;
-  });
-}

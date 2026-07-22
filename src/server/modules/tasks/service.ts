@@ -164,22 +164,3 @@ export async function listFranchiseeAssignments(ctx: RequestContext): Promise<Fr
     }));
   });
 }
-
-/** Completion stats per location for a given task, for admin dashboards. */
-export async function getTaskCompletionStats(ctx: RequestContext, taskId: string) {
-  return withTenant(ctx, async (tx) => {
-    const assignments = await tx.taskAssignment.findMany({ where: { taskId }, include: { location: true } });
-    const completed = assignments.filter((a) => a.status === "COMPLETED");
-    return {
-      total: assignments.length,
-      completed: completed.length,
-      percentComplete: assignments.length ? Math.round((completed.length / assignments.length) * 100) : 0,
-      assignments: assignments.map((a) => ({
-        locationId: a.locationId,
-        locationName: a.location.name,
-        status: a.status,
-        completedAt: a.completedAt,
-      })),
-    };
-  });
-}

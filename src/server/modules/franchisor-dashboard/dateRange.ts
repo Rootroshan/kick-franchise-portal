@@ -88,12 +88,3 @@ export function resolveDateRange(params: { from?: string; to?: string; preset?: 
     }
   }
 }
-
-/** Human date for headers, e.g. "May 1 – May 31, 2025". */
-export function formatRangeLabel(range: DateRange): string {
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  const start = range.start.toLocaleDateString("en-US", opts);
-  const lastDay = new Date(range.end.getTime() - 86_400_000);
-  const end = lastDay.toLocaleDateString("en-US", { ...opts, year: "numeric" });
-  return `${start} – ${end}`;
-}

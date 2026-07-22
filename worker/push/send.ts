@@ -51,15 +51,3 @@ export async function sendPushToLocationMembers(
 
   return { attempted: subscriptions.length, sent, failed };
 }
-
-export async function sendPushToUser(clerkUserId: string, payload: PushPayload, emailFallback?: { to: string; subject: string; html: string }) {
-  const subscriptions = await withTenant(systemKickContext(), (tx) =>
-    tx.pushSubscription.findMany({ where: { clerkUserId, status: { not: "DEAD" } } })
-  );
-  let sent = 0;
-  for (const sub of subscriptions) {
-    const result = await sendPushToSubscription(sub.id, payload, emailFallback);
-    if (result.ok) sent++;
-  }
-  return { attempted: subscriptions.length, sent };
-}

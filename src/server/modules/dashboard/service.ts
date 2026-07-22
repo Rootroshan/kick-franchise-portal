@@ -1,4 +1,4 @@
-import { withTenant, systemKickContext, type RequestContext } from "@/server/db/withTenant";
+import { withTenant, type RequestContext } from "@/server/db/withTenant";
 
 /**
  * Cross-tenant super-admin dashboard aggregation. KICK_ADMIN only — RLS lets
@@ -58,18 +58,6 @@ export type DashboardData = {
   activity: Array<{ id: string; action: string; entity: string; actorId: string; tenantName: string | null; createdAt: Date }>;
   alerts: Array<{ kind: string; label: string; count: number }>;
 };
-
-/** Badge counts for the shell (cheap; runs on every admin page). */
-export async function getAdminBadgeCounts(): Promise<{ notifications: number }> {
-  const [overdue, failed, unverified] = await withTenant(systemKickContext(), (tx) =>
-    Promise.all([
-      tx.taskAssignment.count({ where: { status: "OPEN", task: { dueAt: { lt: new Date() } } } }),
-      tx.order.count({ where: { status: "FAILED" } }),
-      tx.customDomain.count({ where: { status: { not: "VERIFIED" } } }),
-    ])
-  );
-  return { notifications: overdue + failed + unverified };
-}
 
 export async function getDashboardData(ctx: RequestContext): Promise<DashboardData> {
   const period = currentPeriodLabel();

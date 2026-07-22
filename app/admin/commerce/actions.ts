@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/server/modules/identity/guard";
-import { createProduct, updateProduct, createVariant, updateVariant } from "@/server/modules/commerce/products";
+import { createProduct, createVariant } from "@/server/modules/commerce/products";
 import { PRODUCT_CATEGORIES } from "@/server/modules/commerce/schemas";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -60,22 +60,6 @@ export async function createProductAction(input: unknown): Promise<ActionResult>
   return { ok: true, message: "Product created." };
 }
 
-export async function updateProductAction(productId: string, input: unknown): Promise<ActionResult> {
-  const ctx = await requireRole("KICK_ADMIN")();
-
-  const parsed = productInput.omit({ tenantId: true }).partial().safeParse(input);
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
-
-  try {
-    await updateProduct(ctx, productId, parsed.data);
-  } catch (err) {
-    return fail(err);
-  }
-
-  revalidatePath("/admin/commerce");
-  return { ok: true, message: "Product updated." };
-}
-
 const variantInput = z.object({
   productId: z.string().uuid(),
   name: z.string().trim().min(1, "Enter a variant name.").max(200),
@@ -103,18 +87,3 @@ export async function createVariantAction(input: unknown): Promise<ActionResult>
   return { ok: true, message: "Variant added." };
 }
 
-export async function updateVariantAction(variantId: string, input: unknown): Promise<ActionResult> {
-  const ctx = await requireRole("KICK_ADMIN")();
-
-  const parsed = variantInput.omit({ productId: true }).partial().safeParse(input);
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
-
-  try {
-    await updateVariant(ctx, variantId, parsed.data);
-  } catch (err) {
-    return fail(err);
-  }
-
-  revalidatePath("/admin/commerce");
-  return { ok: true, message: "Variant updated." };
-}

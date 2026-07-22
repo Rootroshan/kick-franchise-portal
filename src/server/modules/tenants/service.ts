@@ -445,8 +445,3 @@ export async function listCustomDomains(ctx: RequestContext, tenantId: string | 
   if (!tenantId) throw new HttpError(400, "A tenant must be specified");
   return withTenant(ctx, (tx) => tx.customDomain.findMany({ where: { tenantId } }));
 }
-
-export async function listMemberships(ctx: RequestContext, tenantId: string | null) {
-  if (!tenantId) throw new HttpError(400, "A tenant must be specified");
-  return withTenant(ctx, (tx) => tx.membership.findMany({ where: { tenantId }, include: { location: true } }));
-}

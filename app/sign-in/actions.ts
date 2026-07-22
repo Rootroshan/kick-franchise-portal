@@ -3,12 +3,7 @@
 import { headers } from "next/headers";
 import { authPrisma } from "@/server/db/authClient";
 import { verifyPassword } from "@/server/auth/password";
-import {
-  loginInputSchema,
-  validatePortalLogin,
-  validateAdminLogin,
-  type LoginOutcome,
-} from "@/server/auth/loginValidation";
+import { loginInputSchema, validatePortalLogin, type LoginOutcome } from "@/server/auth/loginValidation";
 
 /**
  * Pre-flight authorisation check for the role-locked brand portal logins
@@ -48,19 +43,4 @@ export async function checkRoleLoginAction(input: {
 
   const host = (await headers()).get("host") ?? "";
   return validatePortalLogin(user.id, host, role);
-}
-
-/** Same pre-flight for the KICK Super Admin login, which has no role selector. */
-export async function checkAdminLoginAction(input: {
-  email: string;
-  password: string;
-}): Promise<LoginOutcome> {
-  const email = input.email.trim().toLowerCase();
-
-  const user = await authPrisma.user.findUnique({ where: { email } });
-  if (!user?.passwordHash || !user.isActive || !(await verifyPassword(user.passwordHash, input.password))) {
-    return { ok: false, code: "INVALID_CREDENTIALS", message: "Incorrect email or password." };
-  }
-
-  return validateAdminLogin(user.id);
 }

@@ -1,5 +1,4 @@
 import { withTenant, systemKickContext } from "@/server/db/withTenant";
-import { HttpError } from "./errors";
 
 export type ResolvedTenant = {
   id: string;
@@ -56,13 +55,6 @@ export async function resolveTenantFromHost(host: string): Promise<ResolvedTenan
   }
 
   return null;
-}
-
-export function requireResolvedTenant(tenant: ResolvedTenant | null): ResolvedTenant {
-  if (!tenant) {
-    throw new HttpError(404, "Unknown tenant for this host");
-  }
-  return tenant;
 }
 
 export type HostDiagnosis =

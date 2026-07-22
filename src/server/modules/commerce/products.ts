@@ -160,16 +160,4 @@ export async function getCatalogForLocation(ctx: RequestContext, tenantId: strin
   );
 }
 
-/** Per-category product counts for the caller's tenant (active, orderable products only). */
-export async function getCatalogCategoryCounts(ctx: RequestContext, tenantId: string) {
-  return withTenant(ctx, async (tx) => {
-    const groups = await tx.product.groupBy({
-      by: ["category"],
-      where: { tenantId, active: true, variants: { some: { active: true } } },
-      _count: { _all: true },
-    });
-    return groups.map((g) => ({ category: g.category, count: g._count._all }));
-  });
-}
-
 export type PrismaTx = Prisma.TransactionClient;
