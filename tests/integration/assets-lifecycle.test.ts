@@ -10,9 +10,10 @@ vi.mock("@/server/lib/storage", () => ({
   createPresignedUploadUrl: async (key: string) => `https://mock-r2.test/${key}`,
   createPresignedDownloadUrl: async (key: string, ttlSeconds = 300) => `https://mock-r2.test/${key}?ttl=${Math.min(ttlSeconds, 300)}`,
   deleteStorageObject: async () => {},
+  uploadObjectDirect: async () => {},
 }));
 
-const { createAsset, listAssets, setAssetStatus, getAssetDownloadUrl, updateAssetMetadata, getAssetVersionHistory } = await import(
+const { createAsset, uploadAsset, listAssets, setAssetStatus, getAssetDownloadUrl, updateAssetMetadata, getAssetVersionHistory } = await import(
   "@/server/modules/assets/service"
 );
 const { listAssetsAdmin, getAssetKpis } = await import("@/server/modules/assets/admin");
@@ -46,6 +47,27 @@ describe("Assets: upload, versioning, lifecycle, tenant isolation", () => {
 
     const logs = await withTenant(kickCtx(), (tx) => tx.auditLog.findMany({ where: { entity: "Asset", entityId: asset.id } }));
     expect(logs.some((l) => l.action === "asset.upload")).toBe(true);
+  });
+
+  function directUploadMeta(overrides: Partial<Parameters<typeof uploadAsset>[3]> = {}) {
+    return { name: "Test Logo", type: "logo", category: "Logo", mime: "image/png", sizeBytes: 1024, ...overrides };
+  }
+
+  it("uploadAsset (server-relayed upload) creates an ACTIVE asset without a client-supplied storageKey", async () => {
+    const { tenant } = await seedTenantWithLocation();
+    const file = Buffer.from("fake-file-bytes");
+    const asset = await uploadAsset(kickCtx(), tenant.id, file, directUploadMeta({ sizeBytes: file.byteLength }));
+    expect(asset.status).toBe("ACTIVE");
+    expect(asset.storageKey).toContain(`tenants/${tenant.id}/assets/`);
+
+    const logs = await withTenant(kickCtx(), (tx) => tx.auditLog.findMany({ where: { entity: "Asset", entityId: asset.id } }));
+    expect(logs.some((l) => l.action === "asset.upload")).toBe(true);
+  });
+
+  it("uploadAsset rejects a file whose byte length does not match the declared sizeBytes", async () => {
+    const { tenant } = await seedTenantWithLocation();
+    const file = Buffer.from("short");
+    await expect(uploadAsset(kickCtx(), tenant.id, file, directUploadMeta({ sizeBytes: 99999 }))).rejects.toThrow(/size/i);
   });
 
   it("creates an archived asset when publishActive is false", async () => {

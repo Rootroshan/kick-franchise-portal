@@ -62,6 +62,18 @@ export async function createPresignedUploadUrl(key: string, mime: string): Promi
 }
 
 /**
+ * Uploads a file to R2 directly from our server (server-to-server, not
+ * subject to browser CORS — unlike a presigned URL, which requires the R2
+ * bucket to have a CORS policy allowing the browser's origin to PUT
+ * directly). Used by upload flows that accept the file as a server-side
+ * multipart body instead of doing a client-side presigned PUT.
+ */
+export async function uploadObjectDirect(key: string, mime: string, body: Buffer): Promise<void> {
+  const [s3, Bucket] = await Promise.all([r2Client(), r2Bucket()]);
+  await s3.send(new PutObjectCommand({ Bucket, Key: key, ContentType: mime, Body: body }));
+}
+
+/**
  * Presigned GET for franchisee/admin downloads. Expires within 5 minutes per
  * spec §14 — never expose a permanent public bucket URL.
  */

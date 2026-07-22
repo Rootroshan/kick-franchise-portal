@@ -155,21 +155,39 @@ export function CreateTenantForm({ cnameTarget }: { cnameTarget: string }) {
     setLogoUploading(true);
     setLogoProgress(0);
     try {
-      const signed = await fetchJson<{ uploadUrl: string; logoReference: string }>("/api/admin/brand-logo/upload-url", {
-        method: "POST", body: JSON.stringify({ mime: file.type, sizeBytes: file.size }),
-      });
-      await new Promise<void>((resolve, reject) => {
+      // Posted to our own server, which relays the file to R2 itself — a
+      // server-to-server PUT, not a browser-facing presigned URL, so it
+      // doesn't depend on the R2 bucket's CORS policy allowing this origin.
+      const result = await new Promise<{ logoReference: string }>((resolve, reject) => {
+        const form = new FormData();
+        form.append("file", file);
+
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", signed.uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type);
+        xhr.open("POST", "/api/admin/brand-logo/upload");
         xhr.upload.onprogress = (event) => event.lengthComputable && setLogoProgress(Math.round((event.loaded / event.total) * 100));
-        xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.send(file);
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              return resolve(JSON.parse(xhr.responseText));
+            } catch {
+              return reject(new Error("Upload failed."));
+            }
+          }
+          let message = "Upload failed.";
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            if (typeof parsed?.error === "string") message = parsed.error;
+          } catch {
+            // Non-JSON error body — fall back to the generic message.
+          }
+          reject(new Error(message));
+        };
+        xhr.onerror = () => reject(new Error("Upload failed."));
+        xhr.send(form);
       });
       if (logoPreview) URL.revokeObjectURL(logoPreview);
       setLogoPreview(URL.createObjectURL(file));
-      setValue("branding.logoReference", signed.logoReference, { shouldDirty: true });
+      setValue("branding.logoReference", result.logoReference, { shouldDirty: true });
       setLogoProgress(100);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Logo upload failed.");

@@ -14,6 +14,9 @@ export const createAssetUploadSchema = z.object({
   publishActive: z.boolean().optional(),
 });
 
+/** Metadata for a direct (server-relayed) upload — no storageKey; the server generates it. */
+export const directAssetUploadMetaSchema = createAssetUploadSchema.omit({ storageKey: true });
+
 export const updateAssetMetadataSchema = z.object({
   name: z.string().min(1).max(300).optional(),
   category: z.string().max(100).nullable().optional(),

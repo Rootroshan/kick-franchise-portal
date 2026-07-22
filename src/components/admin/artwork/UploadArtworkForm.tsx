@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { fetchJson } from "@/lib/fetchJson";
 import { ASSET_CATEGORIES } from "@/server/modules/assets/schemas";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -76,35 +75,43 @@ export function UploadArtworkForm({ returnTo, brandOptions, fixedTenantId, repla
     setUploading(true);
     setProgress(0);
     try {
-      const signed = await fetchJson<{ uploadUrl: string; storageKey: string }>("/api/assets/upload-url", {
-        method: "POST",
-        body: JSON.stringify({ mime: file.type, sizeBytes: file.size, ...(targetTenantId ? { tenantId: targetTenantId } : {}) }),
-      });
+      // Posted to our own server, which relays the file to R2 itself — a
+      // server-to-server PUT, not a browser-facing presigned URL. That
+      // sidesteps needing R2 bucket CORS configured for this origin, which a
+      // direct browser-to-R2 upload would otherwise require.
+      const meta = {
+        name: name.trim(),
+        type: replaces?.type ?? category.toLowerCase().replace(/\s+/g, "-"),
+        category,
+        mime: file.type,
+        sizeBytes: file.size,
+        replacesId: replaces?.id ?? null,
+        versionNotes: versionNotes.trim() || null,
+        publishActive,
+        ...(targetTenantId ? { tenantId: targetTenantId } : {}),
+      };
 
       await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", signed.uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type);
-        xhr.upload.onprogress = (event) => event.lengthComputable && setProgress(Math.round((event.loaded / event.total) * 100));
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Upload failed")));
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.send(file);
-      });
+        const form = new FormData();
+        form.append("file", file);
+        form.append("meta", JSON.stringify(meta));
 
-      await fetchJson("/api/assets", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          type: replaces?.type ?? category.toLowerCase().replace(/\s+/g, "-"),
-          category,
-          mime: file.type,
-          sizeBytes: file.size,
-          storageKey: signed.storageKey,
-          replacesId: replaces?.id ?? null,
-          versionNotes: versionNotes.trim() || null,
-          publishActive,
-          ...(targetTenantId ? { tenantId: targetTenantId } : {}),
-        }),
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/assets/upload");
+        xhr.upload.onprogress = (event) => event.lengthComputable && setProgress(Math.round((event.loaded / event.total) * 100));
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) return resolve();
+          let message = "Upload failed.";
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            if (typeof parsed?.error === "string") message = parsed.error;
+          } catch {
+            // Non-JSON error body — fall back to the generic message.
+          }
+          reject(new Error(message));
+        };
+        xhr.onerror = () => reject(new Error("Upload failed."));
+        xhr.send(form);
       });
 
       toast.success(replaces ? "New version uploaded." : "Artwork uploaded.");

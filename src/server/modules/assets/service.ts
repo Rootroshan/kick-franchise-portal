@@ -1,9 +1,15 @@
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { HttpError } from "@/server/modules/identity/errors";
-import { createPresignedUploadUrl, createPresignedDownloadUrl, assertValidUpload, storageObjectExists } from "@/server/lib/storage";
+import {
+  createPresignedUploadUrl,
+  createPresignedDownloadUrl,
+  assertValidUpload,
+  storageObjectExists,
+  uploadObjectDirect,
+} from "@/server/lib/storage";
 import type { z } from "zod";
-import type { createAssetUploadSchema, updateAssetMetadataSchema } from "./schemas";
+import type { createAssetUploadSchema, directAssetUploadMetaSchema, updateAssetMetadataSchema } from "./schemas";
 
 /** [K,F]: request a presigned PUT URL for a new asset upload. Validates mime/size before issuing. */
 export async function requestAssetUpload(_ctx: RequestContext, tenantId: string, mime: string, sizeBytes: number) {
@@ -11,6 +17,30 @@ export async function requestAssetUpload(_ctx: RequestContext, tenantId: string,
   const storageKey = `tenants/${tenantId}/assets/${crypto.randomUUID()}`;
   const uploadUrl = await createPresignedUploadUrl(storageKey, mime);
   return { uploadUrl, storageKey };
+}
+
+/**
+ * [K,F]: upload the file straight through our server to R2 (server-to-server
+ * PUT — not a browser-facing presigned URL, so R2 bucket CORS never applies)
+ * and create the asset record in one step. Preferred over
+ * requestAssetUpload+createAsset's two-step presigned flow, which requires
+ * the R2 bucket to allow cross-origin PUTs from the browser.
+ */
+export async function uploadAsset(
+  ctx: RequestContext,
+  tenantId: string,
+  file: Buffer,
+  input: z.infer<typeof directAssetUploadMetaSchema>
+) {
+  assertValidUpload(input.mime, input.sizeBytes);
+  if (file.byteLength !== input.sizeBytes) {
+    throw new HttpError(422, "Uploaded file size does not match the declared size");
+  }
+
+  const storageKey = `tenants/${tenantId}/assets/${crypto.randomUUID()}`;
+  await uploadObjectDirect(storageKey, input.mime, file);
+
+  return createAssetRecord(ctx, tenantId, { ...input, storageKey });
 }
 
 /** [K,F]: finalize an asset record after the client has completed the presigned upload. */
@@ -22,6 +52,10 @@ export async function createAsset(ctx: RequestContext, tenantId: string, input: 
     throw new HttpError(422, "Upload did not complete — file not found in storage");
   }
 
+  return createAssetRecord(ctx, tenantId, input);
+}
+
+async function createAssetRecord(ctx: RequestContext, tenantId: string, input: z.infer<typeof createAssetUploadSchema>) {
   return withTenant(ctx, async (tx) => {
     let version = 1;
     if (input.replacesId) {
