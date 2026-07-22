@@ -22,7 +22,7 @@ function downloadCsv(base64: string, filename: string) {
 export const rebatesExportAction: BulkActionDef = {
   key: "export",
   label: "Export CSV",
-  icon: Download,
+  icon: <Download className="h-3.5 w-3.5" aria-hidden="true" />,
   tone: "default",
   action: async (ids) => {
     const result = await bulkExportRebatesAction(ids);

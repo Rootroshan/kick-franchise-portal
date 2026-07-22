@@ -8,11 +8,15 @@ function idFromUrl(url: string): string {
   return parts[parts.length - 1]!;
 }
 
-/** [K,F]: edit an announcement. */
+/**
+ * [K,F]: edit an announcement. FRANCHISOR_ADMIN is pinned to their own
+ * tenant; KICK_ADMIN may edit any tenant's announcement — same convention as
+ * GET .../report and updateAnnouncementAction (see service.ts).
+ */
 export const PATCH = withErrorHandling(async (req) => {
   const ctx = await requireRole("KICK_ADMIN", "FRANCHISOR_ADMIN")();
   const id = idFromUrl(req.url);
   const input = await parseJsonBody(req, updateAnnouncementSchema);
-  const announcement = await updateAnnouncement(ctx, id, input);
+  const announcement = await updateAnnouncement(ctx, id, input, ctx.role === "FRANCHISOR_ADMIN" ? ctx.tenantId ?? undefined : undefined);
   return Response.json({ announcement });
 });

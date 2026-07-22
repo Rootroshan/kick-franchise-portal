@@ -145,7 +145,16 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
     // loser matches zero rows and the whole transaction rolls back. Runs
     // BEFORE the Stripe call so a stock failure never leaves an orphaned
     // PaymentIntent behind.
-    for (const line of lineInputs) {
+    //
+    // Sorted by variantId first: two carts sharing 2+ overlapping variants in
+    // different orders (e.g. [A,B] vs [B,A]) would otherwise lock those rows
+    // in opposite order and can genuinely deadlock in Postgres (40P01) — a raw,
+    // uncaught error surfaced to the caller, not just a slow retry. A single
+    // fixed lock-acquisition order across every checkout makes that class of
+    // deadlock impossible; the allowance row lock above is already per-location
+    // so it doesn't need the same treatment.
+    const sortedLines = [...lineInputs].sort((a, b) => a.variantId.localeCompare(b.variantId));
+    for (const line of sortedLines) {
       const variant = variantMap.get(line.variantId)!;
       if (variant.stock !== null) {
         const updated = await tx.productVariant.updateMany({

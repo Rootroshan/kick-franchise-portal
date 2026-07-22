@@ -17,14 +17,14 @@ const STORE_ACTIONS: BulkActionDef[] = [
   {
     key: "activate",
     label: "Activate",
-    icon: Power,
+    icon: <Power className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "success",
     action: bulkActivateStoresAction,
   },
   {
     key: "deactivate",
     label: "Deactivate",
-    icon: PowerOff,
+    icon: <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "warning",
     action: bulkDeactivateStoresAction,
   },

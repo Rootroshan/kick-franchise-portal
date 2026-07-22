@@ -12,7 +12,7 @@ import { BulkCheckbox, BulkSelectAll } from "./bulk/BulkCheckbox";
 export type Column<Row> = {
   key: string;
   header: string;
-  /** Render cell content. */
+  /** Render cell content. Called server-side only — never passed across the client boundary. */
   cell: (row: Row) => ReactNode;
   /** If set, header becomes a sort link writing ?sort=<sortKey>. */
   sortKey?: string;
@@ -21,29 +21,24 @@ export type Column<Row> = {
   hideOnMobile?: boolean;
 };
 
+/** Column header metadata only — no `cell`, since that never crosses into the client component. */
+export type ColumnHeader = Omit<Column<never>, "cell">;
+
 /**
- * Generic server-rendered table with optional bulk selection.
- * - `selectable` enables checkboxes and syncs with BulkSelectionProvider.
- * - `onRowClick` navigates to the row href when provided.
- * - Sorting is URL-driven (?sort=&direction=).
+ * A single already-rendered row, resolved server-side from `Column.cell` /
+ * `rowKey` / `rowHref` callbacks. React elements and strings are plain
+ * serializable data, so — unlike the callbacks that produced them — this is
+ * safe to pass from a Server Component into this Client Component.
  */
-export function DataTable<Row>({
-  columns,
-  rows,
-  rowKey,
-  rowHref,
-  basePath,
-  currentParams,
-  sort,
-  direction,
-  empty,
-  selectable = false,
-  totalFiltered,
-}: {
-  columns: Column<Row>[];
-  rows: Row[];
-  rowKey: (row: Row) => string;
-  rowHref?: (row: Row) => string;
+export type ResolvedRow = {
+  id: string;
+  href?: string;
+  cells: ReactNode[];
+};
+
+type DataTableProps = {
+  columns: ColumnHeader[];
+  rows: ResolvedRow[];
   basePath: string;
   currentParams: Record<string, string>;
   sort?: string;
@@ -53,21 +48,39 @@ export function DataTable<Row>({
   selectable?: boolean;
   /** Total filtered count (for "select all X" label) */
   totalFiltered?: number;
-}) {
-  const { setPage, isSelected } = useBulkSelection();
+};
 
-  // Sync current page rows into the bulk selection context
-  useEffect(() => {
-    if (!selectable) return;
-    const ids = rows.map(rowKey);
-    setPage(ids, totalFiltered ?? rows.length);
-  }, [rows, rowKey, selectable, setPage, totalFiltered]);
-
+/**
+ * Generic client-rendered table with optional bulk selection.
+ * - `selectable` enables checkboxes and syncs with BulkSelectionProvider.
+ *   Only reads that context when `selectable` is true (via BulkSelectionSync
+ *   below), so non-selectable callers don't need a BulkSelectionProvider
+ *   ancestor at all.
+ * - Sorting is URL-driven (?sort=&direction=).
+ *
+ * Takes pre-resolved rows/headers (plain data), not the row-mapping functions
+ * that produced them — functions can't be passed from a Server Component
+ * (e.g. an admin `page.tsx`) into this Client Component. Callers should go
+ * through `DataTableSection` (or `resolveTableRows` directly), which does
+ * that resolution server-side.
+ */
+export function DataTable({
+  columns,
+  rows,
+  basePath,
+  currentParams,
+  sort,
+  direction,
+  empty,
+  selectable = false,
+  totalFiltered,
+}: DataTableProps) {
   if (rows.length === 0) {
     return <EmptyState title={empty?.title ?? "Nothing here yet"} description={empty?.description} />;
   }
 
   const total = totalFiltered ?? rows.length;
+  const allIds = rows.map((r) => r.id);
 
   return (
     <div className="scrollbar-hide overflow-x-auto rounded-xl border border-border bg-card">
@@ -77,7 +90,7 @@ export function DataTable<Row>({
             {selectable && (
               <th className="w-10 px-3 py-2.5">
                 <BulkSelectAll
-                  allIds={rows.map(rowKey)}
+                  allIds={allIds}
                   totalFiltered={total}
                 />
               </th>
@@ -104,48 +117,80 @@ export function DataTable<Row>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const id = rowKey(row);
-            const href = rowHref?.(row);
-            const selected = selectable && isSelected(id);
-            return (
-              <tr
-                key={id}
-                className={`border-b border-border last:border-0 transition-colors ${
-                  selected
-                    ? "bg-status-info/5"
-                    : "hover:bg-muted/30"
-                }`}
-              >
-                {selectable && (
-                  <td className="w-10 px-3 py-2.5 align-middle">
-                    <BulkCheckbox id={id} />
-                  </td>
-                )}
-                {columns.map((col) => {
-                  const content = col.cell(row);
-                  return (
-                    <td
-                      key={col.key}
-                      className={`px-3 py-2.5 align-middle ${col.hideOnMobile ? "hidden sm:table-cell" : ""} ${col.className ?? ""}`}
-                    >
-                      {href ? (
-                        <Link href={href} className="block">
-                          {content}
-                        </Link>
-                      ) : (
-                        content
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
+          {selectable && <BulkSelectionSync ids={allIds} totalFiltered={total} />}
+          {rows.map((row) => (
+            <DataRow key={row.id} row={row} columns={columns} selectable={selectable} />
+          ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+/**
+ * Renders one row. Split into selectable/plain variants (rather than
+ * conditionally calling useBulkSelection) so non-selectable tables never
+ * call that hook and never need a BulkSelectionProvider ancestor.
+ */
+function DataRow({ row, columns, selectable }: { row: ResolvedRow; columns: ColumnHeader[]; selectable: boolean }) {
+  return selectable ? (
+    <SelectableDataRow row={row} columns={columns} />
+  ) : (
+    <tr className="border-b border-border last:border-0 transition-colors hover:bg-muted/30">
+      <RowCells row={row} columns={columns} />
+    </tr>
+  );
+}
+
+function SelectableDataRow({ row, columns }: { row: ResolvedRow; columns: ColumnHeader[] }) {
+  const { isSelected } = useBulkSelection();
+  const selected = isSelected(row.id);
+  return (
+    <tr
+      className={`border-b border-border last:border-0 transition-colors ${
+        selected ? "bg-status-info/5" : "hover:bg-muted/30"
+      }`}
+    >
+      <td className="w-10 px-3 py-2.5 align-middle">
+        <BulkCheckbox id={row.id} />
+      </td>
+      <RowCells row={row} columns={columns} />
+    </tr>
+  );
+}
+
+function RowCells({ row, columns }: { row: ResolvedRow; columns: ColumnHeader[] }) {
+  return (
+    <>
+      {columns.map((col, i) => {
+        const content = row.cells[i];
+        return (
+          <td
+            key={col.key}
+            className={`px-3 py-2.5 align-middle ${col.hideOnMobile ? "hidden sm:table-cell" : ""} ${col.className ?? ""}`}
+          >
+            {row.href ? (
+              <Link href={row.href} className="block">
+                {content}
+              </Link>
+            ) : (
+              content
+            )}
+          </td>
+        );
+      })}
+    </>
+  );
+}
+
+/** Invisible row: syncs the current page's ids into BulkSelectionProvider. Only mounted when `selectable`. */
+function BulkSelectionSync({ ids, totalFiltered }: { ids: string[]; totalFiltered: number }) {
+  const { setPage } = useBulkSelection();
+  useEffect(() => {
+    setPage(ids, totalFiltered);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids.join(","), totalFiltered, setPage]);
+  return null;
 }
 
 function SortHeader({

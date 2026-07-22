@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
+import type { ReactNode } from "react";
 import { X, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useBulkSelection } from "./BulkSelection";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -9,7 +10,14 @@ import { cn } from "@/lib/utils";
 export type BulkActionDef = {
   key: string;
   label: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  /**
+   * A rendered icon element (e.g. `<XCircle className="h-3.5 w-3.5" />`), not
+   * a component reference — a bare `React.ComponentType` can't cross from a
+   * Server Component into this Client Component (only plain data/rendered
+   * elements can), which is exactly how a Server Component page passing
+   * `icon: XCircle` here used to crash on every render.
+   */
+  icon?: ReactNode;
   destructive?: boolean;
   /** "destructive" | "warning" | "default" */
   tone?: "destructive" | "warning" | "default" | "success";
@@ -171,7 +179,7 @@ function BulkActionButton({
       >
         {action.icon && (
           <span className={cn("flex h-5 w-5 items-center justify-center rounded", iconBgCls)}>
-            <action.icon className="h-3.5 w-3.5" aria-hidden="true" />
+            {action.icon}
           </span>
         )}
         {action.label}

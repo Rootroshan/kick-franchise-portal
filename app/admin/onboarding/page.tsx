@@ -6,6 +6,7 @@ import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { PageHeader, KPIStatCard, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { DataTable, type Column } from "@/components/admin/DataTable";
+import { resolveTableRows } from "@/components/admin/resolveTableRows";
 import type { OnboardingRow } from "@/server/modules/onboarding/admin";
 
 export const dynamic = "force-dynamic";
@@ -64,10 +65,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: R
       <ListToolbar searchPlaceholder="Search templates…" filters={[{ key: "brand", label: "Brand", options: brandOptions }]} />
 
       <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(t) => t.id}
-        rowHref={(t) => `/admin/onboarding/${t.id}`}
+        {...resolveTableRows(columns, rows, (t) => t.id, (t) => `/admin/onboarding/${t.id}`)}
         basePath="/admin/onboarding"
         currentParams={q.raw}
         sort={q.sort}

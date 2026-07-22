@@ -13,10 +13,11 @@ import {
 } from "@/app/franchisor/announcements/actions";
 import { AnnouncementListCard } from "./AnnouncementListCard";
 
+const ICON_CLS = "h-3.5 w-3.5";
 const FRANCHISOR_ANNOUNCEMENT_ACTIONS: BulkActionDef[] = [
-  { key: "pin", label: "Pin", icon: Pin, tone: "default", action: bulkPinFranchisorAnnouncementsAction },
-  { key: "expire", label: "Expire", icon: Clock, tone: "warning", action: bulkExpireFranchisorAnnouncementsAction },
-  { key: "archive", label: "Archive", icon: Archive, tone: "warning", action: bulkArchiveFranchisorAnnouncementsAction },
+  { key: "pin", label: "Pin", icon: <Pin className={ICON_CLS} aria-hidden="true" />, tone: "default", action: bulkPinFranchisorAnnouncementsAction },
+  { key: "expire", label: "Expire", icon: <Clock className={ICON_CLS} aria-hidden="true" />, tone: "warning", action: bulkExpireFranchisorAnnouncementsAction },
+  { key: "archive", label: "Archive", icon: <Archive className={ICON_CLS} aria-hidden="true" />, tone: "warning", action: bulkArchiveFranchisorAnnouncementsAction },
 ];
 
 export function AnnouncementListSection({ rows, total }: { rows: FranchisorAnnouncementRow[]; total: number }) {

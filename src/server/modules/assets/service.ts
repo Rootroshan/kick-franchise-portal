@@ -2,7 +2,6 @@ import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { HttpError } from "@/server/modules/identity/errors";
 import {
-  createPresignedUploadUrl,
   createPresignedDownloadUrl,
   assertValidUpload,
   storageObjectExists,
@@ -11,20 +10,10 @@ import {
 import type { z } from "zod";
 import type { createAssetUploadSchema, directAssetUploadMetaSchema, updateAssetMetadataSchema } from "./schemas";
 
-/** [K,F]: request a presigned PUT URL for a new asset upload. Validates mime/size before issuing. */
-export async function requestAssetUpload(_ctx: RequestContext, tenantId: string, mime: string, sizeBytes: number) {
-  assertValidUpload(mime, sizeBytes);
-  const storageKey = `tenants/${tenantId}/assets/${crypto.randomUUID()}`;
-  const uploadUrl = await createPresignedUploadUrl(storageKey, mime);
-  return { uploadUrl, storageKey };
-}
-
 /**
  * [K,F]: upload the file straight through our server to R2 (server-to-server
  * PUT — not a browser-facing presigned URL, so R2 bucket CORS never applies)
- * and create the asset record in one step. Preferred over
- * requestAssetUpload+createAsset's two-step presigned flow, which requires
- * the R2 bucket to allow cross-origin PUTs from the browser.
+ * and create the asset record in one step.
  */
 export async function uploadAsset(
   ctx: RequestContext,

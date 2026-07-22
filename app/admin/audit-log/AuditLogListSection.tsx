@@ -1,12 +1,7 @@
-"use client";
-
-import { BulkSelectionProvider } from "@/components/admin/bulk/BulkSelection";
-import { BulkActionToolbar } from "@/components/admin/bulk/BulkActionToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
-import { Download } from "lucide-react";
+import type { Column } from "@/components/admin/DataTable";
+import { resolveTableRows } from "@/components/admin/resolveTableRows";
 import type { AuditRow } from "@/server/modules/identity/auditList";
-import { bulkExportAuditLogsAction } from "./auditLogActions";
-import type { BulkActionDef } from "@/components/admin/bulk/BulkActionToolbar";
+import { AuditLogListSectionClient } from "./AuditLogListSectionClient";
 
 type Props = {
   rows: AuditRow[];
@@ -20,69 +15,23 @@ type Props = {
 };
 
 /**
- * Client wrapper for audit log with bulk export.
+ * Server Component. Resolves each row's `cell` callbacks into plain data here
+ * — functions can't be passed from a Server Component into the "use client"
+ * table below, only serializable data can.
  */
-export function AuditLogListSection(props: Props) {
-  return (
-    <BulkSelectionProvider>
-      <AuditLogListSectionInner {...props} />
-    </BulkSelectionProvider>
-  );
-}
-
-function AuditLogListSectionInner({
-  rows,
-  total,
-  columns,
-  basePath,
-  currentParams,
-  sort,
-  direction,
-  empty,
-}: Props) {
-  // The export action is defined here (not inline in the array literal) to keep
-  // this file as a valid client component. The action calls the server action
-  // and then triggers a browser download from the base64-encoded CSV payload.
-  const exportAction: BulkActionDef = {
-    key: "export",
-    label: "Export CSV",
-    icon: Download,
-    tone: "default",
-    action: async (ids) => {
-      const result = await bulkExportAuditLogsAction(ids);
-      if (result.ok && result.csv) {
-        const binary = atob(result.csv);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const blob = new Blob([bytes], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-      return result;
-    },
-  };
+export function AuditLogListSection({ rows, total, columns, basePath, currentParams, sort, direction, empty }: Props) {
+  const { columns: headers, rows: resolvedRows } = resolveTableRows(columns, rows, (l) => l.id);
 
   return (
-    <>
-      <BulkActionToolbar actions={[exportAction]} itemName="log" />
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(l) => l.id}
-        basePath={basePath}
-        currentParams={currentParams}
-        sort={sort}
-        direction={direction}
-        empty={empty}
-        selectable
-        totalFiltered={total}
-      />
-    </>
+    <AuditLogListSectionClient
+      headers={headers}
+      rows={resolvedRows}
+      total={total}
+      basePath={basePath}
+      currentParams={currentParams}
+      sort={sort}
+      direction={direction}
+      empty={empty}
+    />
   );
 }

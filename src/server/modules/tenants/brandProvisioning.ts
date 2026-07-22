@@ -4,7 +4,7 @@ import type { z } from "zod";
 import { authPrisma } from "@/server/db/authClient";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { createInvitation } from "@/server/auth/invitations";
-import { createPresignedUploadUrl, storageObjectExists, uploadObjectDirect } from "@/server/lib/storage";
+import { storageObjectExists, uploadObjectDirect } from "@/server/lib/storage";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { HttpError } from "@/server/modules/identity/errors";
 import { normaliseHostname, verificationRecordName } from "./domainNormalise";
@@ -39,19 +39,10 @@ export async function verifyPortalDomainDns(rawDomain: string) {
   }
 }
 
-export async function requestTemporaryBrandLogo(mime: string, sizeBytes: number) {
-  const allowed = ["image/png", "image/jpeg", "image/webp"];
-  if (!allowed.includes(mime)) throw new HttpError(400, "Use a PNG, JPG, JPEG, or WEBP image.");
-  if (sizeBytes <= 0 || sizeBytes > 5 * 1024 * 1024) throw new HttpError(400, "Logo files must be 5 MB or smaller.");
-  const storageKey = `brand-logo-temp/${randomUUID()}`;
-  const uploadUrl = await createPresignedUploadUrl(storageKey, mime);
-  return { uploadUrl, logoReference: storageKey };
-}
-
 /**
  * Uploads a temporary brand logo straight through our server to R2
- * (server-to-server — not subject to R2 bucket CORS, unlike the presigned-URL
- * flow above which requires the bucket to allow a direct browser PUT).
+ * (server-to-server — not subject to R2 bucket CORS, unlike a presigned-URL
+ * flow which requires the bucket to allow a direct browser PUT).
  */
 export async function uploadTemporaryBrandLogo(mime: string, sizeBytes: number, file: Buffer) {
   const allowed = ["image/png", "image/jpeg", "image/webp"];

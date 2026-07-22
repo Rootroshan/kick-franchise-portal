@@ -7,6 +7,7 @@ import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { DataTable, type Column } from "@/components/admin/DataTable";
+import { resolveTableRows } from "@/components/admin/resolveTableRows";
 import type { ReportRow } from "@/server/modules/rebates/reportsAdmin";
 
 export const dynamic = "force-dynamic";
@@ -84,9 +85,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Reco
       />
 
       <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.id}
+        {...resolveTableRows(columns, rows, (r) => r.id)}
         basePath="/admin/rebates/reports"
         currentParams={q.raw}
         sort={q.sort}

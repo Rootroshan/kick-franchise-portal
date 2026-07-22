@@ -59,14 +59,19 @@ export async function updateAnnouncementAction(id: string, formData: FormData) {
   const owned = await withTenant(ctx, (tx) => tx.announcement.findFirst({ where: { id, tenantId: ctx.tenantId }, select: { id: true } }));
   if (!owned) throw new HttpError(404, "Announcement not found");
 
-  await updateAnnouncement(ctx, id, {
-    title: input.title,
-    body: input.body,
-    isPinned: input.isPinned,
-    requiresAck: input.requiresAck,
-    publishAt: input.publishAt ? new Date(input.publishAt) : null,
-    expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-  });
+  await updateAnnouncement(
+    ctx,
+    id,
+    {
+      title: input.title,
+      body: input.body,
+      isPinned: input.isPinned,
+      requiresAck: input.requiresAck,
+      publishAt: input.publishAt ? new Date(input.publishAt) : null,
+      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+    },
+    ctx.tenantId
+  );
   revalidatePath("/franchisor/announcements");
   revalidatePath(`/franchisor/announcements/${id}`);
   redirect(`/franchisor/announcements/${id}`);
@@ -77,7 +82,7 @@ export async function togglePinAction(id: string, pinned: boolean) {
   const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
   const owned = await withTenant(ctx, (tx) => tx.announcement.findFirst({ where: { id, tenantId: ctx.tenantId }, select: { id: true } }));
   if (!owned) throw new HttpError(404, "Announcement not found");
-  await updateAnnouncement(ctx, id, { isPinned: pinned });
+  await updateAnnouncement(ctx, id, { isPinned: pinned }, ctx.tenantId);
   revalidatePath("/franchisor/announcements");
   revalidatePath(`/franchisor/announcements/${id}`);
 }

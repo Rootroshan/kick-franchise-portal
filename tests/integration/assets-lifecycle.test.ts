@@ -7,7 +7,6 @@ import { kickCtx, franchisorCtx, franchiseeCtx, resetDatabase, seedTenantWithLoc
 vi.mock("@/server/lib/storage", () => ({
   assertValidUpload: () => {},
   storageObjectExists: async () => true,
-  createPresignedUploadUrl: async (key: string) => `https://mock-r2.test/${key}`,
   createPresignedDownloadUrl: async (key: string, ttlSeconds = 300) => `https://mock-r2.test/${key}?ttl=${Math.min(ttlSeconds, 300)}`,
   deleteStorageObject: async () => {},
   uploadObjectDirect: async () => {},

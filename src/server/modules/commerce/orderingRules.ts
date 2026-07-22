@@ -1,6 +1,18 @@
 import type { Prisma } from "@prisma/client";
 import { HttpError } from "@/server/modules/identity/errors";
+import { STATUS_BUCKETS } from "@/lib/orderStatus";
 import type { CartItem } from "./schemas";
+
+/** Any order that counts as "recently placed" for cadence purposes — every
+ *  status except cancelled/refunded/failed, so an order that has simply
+ *  progressed through fulfilment (PROCESSING/SHIPPED/DELIVERED) still blocks
+ *  a cadence-restricted reorder, same as this module's own STATUS_BUCKETS
+ *  source of truth (src/lib/orderStatus.ts) already defines for display. */
+const CADENCE_ACTIVE_STATUSES = [
+  ...STATUS_BUCKETS.processing,
+  ...STATUS_BUCKETS.shipped,
+  ...STATUS_BUCKETS.delivered,
+];
 
 /**
  * Enforces per-location ordering rules server-side: which products a store
@@ -39,7 +51,7 @@ export async function assertOrderingRulesSatisfied(
         const recentOrder = await tx.orderLine.findFirst({
           where: {
             variant: { productId: item.productId },
-            order: { locationId, createdAt: { gte: cutoff }, status: { in: ["PAID", "PENDING", "FULFILLED"] } },
+            order: { locationId, createdAt: { gte: cutoff }, status: { in: CADENCE_ACTIVE_STATUSES } },
           },
         });
         if (recentOrder) {

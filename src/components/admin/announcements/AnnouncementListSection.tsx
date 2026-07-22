@@ -17,15 +17,16 @@ import {
 } from "@/app/admin/announcements/announcementActions";
 import { AnnouncementCardMenu } from "./AnnouncementCardMenu";
 
+const ICON_CLS = "h-3.5 w-3.5";
 const ANNOUNCEMENT_ACTIONS: BulkActionDef[] = [
-  { key: "publish", label: "Publish", icon: Send, tone: "success", action: bulkPublishAnnouncementsAction },
-  { key: "pin", label: "Pin", icon: Pin, tone: "default", action: bulkPinAnnouncementsAction },
-  { key: "expire", label: "Expire", icon: Clock, tone: "warning", action: bulkExpireAnnouncementsAction },
-  { key: "archive", label: "Archive", icon: Archive, tone: "warning", action: bulkArchiveAnnouncementsAction },
+  { key: "publish", label: "Publish", icon: <Send className={ICON_CLS} aria-hidden="true" />, tone: "success", action: bulkPublishAnnouncementsAction },
+  { key: "pin", label: "Pin", icon: <Pin className={ICON_CLS} aria-hidden="true" />, tone: "default", action: bulkPinAnnouncementsAction },
+  { key: "expire", label: "Expire", icon: <Clock className={ICON_CLS} aria-hidden="true" />, tone: "warning", action: bulkExpireAnnouncementsAction },
+  { key: "archive", label: "Archive", icon: <Archive className={ICON_CLS} aria-hidden="true" />, tone: "warning", action: bulkArchiveAnnouncementsAction },
   {
     key: "delete",
     label: "Delete",
-    icon: Trash2,
+    icon: <Trash2 className={ICON_CLS} aria-hidden="true" />,
     tone: "destructive",
     confirmTitle: "Delete selected announcements?",
     confirmMessage: "Published announcements will be removed from all stores.",

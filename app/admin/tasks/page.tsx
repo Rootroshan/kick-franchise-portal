@@ -18,7 +18,7 @@ const TASK_ACTIONS: BulkActionDef[] = [
   {
     key: "delete",
     label: "Delete",
-    icon: Trash2,
+    icon: <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "destructive",
     confirmTitle: "Delete selected tasks?",
     confirmMessage: "This removes the task and all its assignments. Store progress data is preserved.",

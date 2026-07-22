@@ -67,7 +67,8 @@ export async function createTask(ctx: RequestContext, tenantId: string, input: z
     await sendPushToLocationMembers(
       tenantId,
       { title: "New task assigned", body, url: `/tasks/${assignmentId}` },
-      loc.id
+      loc.id,
+      "TASK"
     ).catch(() => {
       // Push delivery must never fail task creation either.
     });

@@ -56,11 +56,16 @@ export async function fireAnnouncementPublishedFanOut(ctx: RequestContext, annou
   // publish cron job makes (worker/jobs/announcements.ts). Immediate
   // publish previously only fired the in-app inbox notification above;
   // a "publish now" announcement got no push at all.
-  await sendPushToLocationMembers(announcement.tenantId, {
-    title: "New announcement",
-    body: announcement.title,
-    url: `/announcements/${announcement.id}`,
-  }).catch(() => {
+  await sendPushToLocationMembers(
+    announcement.tenantId,
+    {
+      title: "New announcement",
+      body: announcement.title,
+      url: `/announcements/${announcement.id}`,
+    },
+    undefined,
+    "ANNOUNCEMENT"
+  ).catch(() => {
     // Never fail the publish because push delivery failed.
   });
 }
@@ -111,9 +116,16 @@ export async function createAnnouncement(ctx: RequestContext, tenantId: string, 
   return announcement;
 }
 
-export async function updateAnnouncement(ctx: RequestContext, id: string, input: z.infer<typeof updateAnnouncementSchema>) {
+/**
+ * `tenantId` is required for FRANCHISOR_ADMIN (pinned to their own brand —
+ * never trust a wider lookup for that role) and omitted for KICK_ADMIN, who
+ * may legitimately update any tenant's announcement. Explicit app-layer
+ * ownership check either way, matching getAcknowledgementReport's convention
+ * rather than relying solely on the RLS session policy.
+ */
+export async function updateAnnouncement(ctx: RequestContext, id: string, input: z.infer<typeof updateAnnouncementSchema>, tenantId?: string) {
   return withTenant(ctx, async (tx) => {
-    const before = await tx.announcement.findUnique({ where: { id } });
+    const before = await tx.announcement.findFirst({ where: { id, ...(tenantId ? { tenantId } : {}) } });
     if (!before) throw new HttpError(404, "Announcement not found");
 
     const after = await tx.announcement.update({

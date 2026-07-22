@@ -1,8 +1,6 @@
-"use client";
-
-import { BulkSelectionProvider } from "@/components/admin/bulk/BulkSelection";
-import { BulkActionToolbar } from "@/components/admin/bulk/BulkActionToolbar";
-import { DataTable, type Column } from "@/components/admin/DataTable";
+import { DataTableSectionClient } from "@/components/admin/DataTableSectionClient";
+import { resolveTableRows } from "@/components/admin/resolveTableRows";
+import type { Column } from "@/components/admin/DataTable";
 import type { BulkActionDef } from "@/components/admin/bulk/BulkActionToolbar";
 
 type Props<Row> = {
@@ -20,15 +18,13 @@ type Props<Row> = {
   total: number;
 };
 
-export function DataTableSection<Row>(props: Props<Row>) {
-  return (
-    <BulkSelectionProvider>
-      <DataTableSectionInner {...props} />
-    </BulkSelectionProvider>
-  );
-}
-
-function DataTableSectionInner<Row>({
+/**
+ * Server Component. Resolves each row's `cell`/`rowKey`/`rowHref` callbacks
+ * into plain data (rendered nodes, strings) here, before handing off to the
+ * "use client" table below — functions can't be passed from a Server
+ * Component into a Client Component, only serializable data can.
+ */
+export function DataTableSection<Row>({
   rows,
   columns,
   rowKey,
@@ -42,29 +38,20 @@ function DataTableSectionInner<Row>({
   itemName,
   total,
 }: Props<Row>) {
-  // No point rendering checkboxes for a list with nothing to bulk-act on —
-  // e.g. Allowances/Rebates, whose rows are an append-only ledger view and a
-  // computed-status rule list respectively, neither of which has a safe bulk
-  // mutation. An empty actions array means "no bulk action exists here," not
-  // "select rows and see an empty toolbar."
-  const hasActions = actions.length > 0;
+  const { columns: headers, rows: resolvedRows } = resolveTableRows(columns, rows, rowKey, rowHref);
 
   return (
-    <>
-      {hasActions && <BulkActionToolbar actions={actions} itemName={itemName} />}
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={rowKey}
-        rowHref={rowHref}
-        basePath={basePath}
-        currentParams={currentParams}
-        sort={sort}
-        direction={direction}
-        empty={empty}
-        selectable={hasActions}
-        totalFiltered={total}
-      />
-    </>
+    <DataTableSectionClient
+      headers={headers}
+      rows={resolvedRows}
+      basePath={basePath}
+      currentParams={currentParams}
+      sort={sort}
+      direction={direction}
+      empty={empty}
+      actions={actions}
+      itemName={itemName}
+      total={total}
+    />
   );
 }

@@ -19,7 +19,7 @@ import Link from "next/link";
 const exportAction: BulkActionDef = {
   key: "export",
   label: "Export CSV",
-  icon: Download,
+  icon: <Download className="h-3.5 w-3.5" aria-hidden="true" />,
   tone: "default",
   action: async (ids) => {
     const result = await bulkExportPaymentsAction(ids);

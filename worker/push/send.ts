@@ -1,3 +1,4 @@
+import type { NotificationCategory } from "@prisma/client";
 import { systemKickContext, withTenant } from "@/server/db/withTenant";
 import { sendPushToSubscription, type PushPayload } from "@/server/lib/push";
 
@@ -6,12 +7,24 @@ import { sendPushToSubscription, type PushPayload } from "@/server/lib/push";
  * Membership in the given tenant. Falls back to email per-recipient on
  * push failure (spec §15). Dead subscriptions are marked for later cleanup
  * by the pruneDeadSubscriptions job, not deleted synchronously here.
+ *
+ * `category` gates this the same way createNotification() gates the in-app
+ * fan-out (Membership.notificationPrefs[category] === false = opted out):
+ * push/email is a separate delivery channel from the in-app inbox, so it
+ * needs its own check on the same preference rather than inheriting one.
  */
-export async function sendPushToLocationMembers(tenantId: string, payload: PushPayload, locationId?: string) {
+export async function sendPushToLocationMembers(
+  tenantId: string,
+  payload: PushPayload,
+  locationId: string | undefined,
+  category: NotificationCategory
+) {
   const memberships = await withTenant(systemKickContext(), (tx) =>
     tx.membership.findMany({
       where: { tenantId, ...(locationId ? { locationId } : {}) },
     })
+  ).then((rows) =>
+    rows.filter((m) => (m.notificationPrefs as Record<string, unknown>)[category] !== false)
   );
 
   const clerkUserIds = memberships.map((m) => m.clerkUserId);

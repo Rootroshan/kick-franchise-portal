@@ -3,6 +3,7 @@ import { withTenant } from "@/server/db/withTenant";
 import { kickCtx, franchisorCtx, franchiseeCtx, resetDatabase, seedTenantWithLocation } from "../helpers/db";
 import {
   createAnnouncement,
+  updateAnnouncement,
   listAnnouncements,
   acknowledgeAnnouncement,
   markAnnouncementRead,
@@ -164,6 +165,27 @@ describe("Announcements: visibility, ack-once, pinned sort, scheduling", () => {
 
     const after = await withTenant(kickCtx(), (tx) => tx.announcement.findUnique({ where: { id: created.id } }));
     expect(after?.status).toBe("EXPIRED");
+  });
+
+  it("updateAnnouncement for FRANCHISOR_ADMIN rejects another tenant's announcement even with the id known", async () => {
+    const a = await seedTenantWithLocation();
+    const b = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(a.tenant.id), a.tenant.id, { title: "A only", body: "x", isPinned: false, requiresAck: false });
+
+    // b's FRANCHISOR_ADMIN passes b's own tenantId — the app-layer ownership
+    // check must reject a's announcement rather than relying on RLS alone.
+    await expect(updateAnnouncement(franchisorCtx(b.tenant.id), created.id, { title: "Hijacked" }, b.tenant.id)).rejects.toThrow();
+
+    const unchanged = await withTenant(kickCtx(), (tx) => tx.announcement.findUnique({ where: { id: created.id } }));
+    expect(unchanged?.title).toBe("A only");
+  });
+
+  it("updateAnnouncement lets KICK_ADMIN (no tenantId passed) update any tenant's announcement", async () => {
+    const { tenant } = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, { title: "Before", body: "x", isPinned: false, requiresAck: false });
+
+    const updated = await updateAnnouncement(kickCtx(), created.id, { title: "After" });
+    expect(updated.title).toBe("After");
   });
 
   it("getAcknowledgementReport for FRANCHISOR_ADMIN rejects another tenant's announcement even with the id known", async () => {

@@ -16,10 +16,11 @@ import { cn } from "@/lib/utils";
 
 type Props = { rows: AssetRow[]; total: number };
 
+const ICON_CLS = "h-3.5 w-3.5";
 const ARTWORK_ACTIONS: BulkActionDef[] = [
-  { key: "restore", label: "Restore", icon: RotateCcw, tone: "success", action: bulkRestoreAssetsAction },
-  { key: "deprecate", label: "Deprecate", icon: Ban, tone: "warning", action: bulkDeprecateAssetsAction },
-  { key: "archive", label: "Archive", icon: Archive, tone: "warning", action: bulkArchiveAssetsAction },
+  { key: "restore", label: "Restore", icon: <RotateCcw className={ICON_CLS} aria-hidden="true" />, tone: "success", action: bulkRestoreAssetsAction },
+  { key: "deprecate", label: "Deprecate", icon: <Ban className={ICON_CLS} aria-hidden="true" />, tone: "warning", action: bulkDeprecateAssetsAction },
+  { key: "archive", label: "Archive", icon: <Archive className={ICON_CLS} aria-hidden="true" />, tone: "warning", action: bulkArchiveAssetsAction },
 ];
 
 export function FranchisorArtworkListSection({ rows, total }: Props) {

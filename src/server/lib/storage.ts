@@ -54,13 +54,6 @@ export function assertValidUpload(mime: string, sizeBytes: number) {
   }
 }
 
-/** Presigned PUT for admin uploads. Expires in 5 minutes. */
-export async function createPresignedUploadUrl(key: string, mime: string): Promise<string> {
-  const [s3, Bucket] = await Promise.all([r2Client(), r2Bucket()]);
-  const cmd = new PutObjectCommand({ Bucket, Key: key, ContentType: mime });
-  return getSignedUrl(s3, cmd, { expiresIn: 300 });
-}
-
 /**
  * Uploads a file to R2 directly from our server (server-to-server, not
  * subject to browser CORS — unlike a presigned URL, which requires the R2

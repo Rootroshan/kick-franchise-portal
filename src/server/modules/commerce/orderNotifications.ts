@@ -46,7 +46,7 @@ export async function notifyOrderEvent(orderId: string, event: OrderEvent): Prom
       entityId: order.id,
     });
 
-    await sendPushToLocationMembers(order.tenantId, { title: copy.title(ref), body: copy.body(ref), url: href }, order.locationId);
+    await sendPushToLocationMembers(order.tenantId, { title: copy.title(ref), body: copy.body(ref), url: href }, order.locationId, "ORDER");
   } catch (err) {
     // Notifications are downstream of the state change — log loudly, never rethrow.
     console.error(`Failed to send order ${event} notification for ${orderId}:`, err);

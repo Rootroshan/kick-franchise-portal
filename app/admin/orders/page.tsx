@@ -18,7 +18,7 @@ const ORDER_ACTIONS: BulkActionDef[] = [
   {
     key: "cancel",
     label: "Cancel",
-    icon: XCircle,
+    icon: <XCircle className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "destructive",
     confirmTitle: "Cancel selected orders?",
     confirmMessage: "Only pending and paid orders can be cancelled. Already fulfilled or refunded orders cannot be cancelled in bulk.",

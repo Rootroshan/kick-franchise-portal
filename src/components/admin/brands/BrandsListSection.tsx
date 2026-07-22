@@ -21,21 +21,21 @@ const BRAND_ACTIONS: BulkActionDef[] = [
   {
     key: "activate",
     label: "Activate",
-    icon: Power,
+    icon: <Power className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "success",
     action: bulkActivateBrandsAction,
   },
   {
     key: "deactivate",
     label: "Deactivate",
-    icon: PowerOff,
+    icon: <PowerOff className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "warning",
     action: bulkDeactivateBrandsAction,
   },
   {
     key: "delete",
     label: "Delete",
-    icon: Trash2,
+    icon: <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />,
     tone: "destructive",
     confirmTitle: "Delete selected brands?",
     confirmMessage:

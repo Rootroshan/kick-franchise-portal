@@ -47,7 +47,8 @@ export async function sendOverdueTaskReminders() {
     await sendPushToLocationMembers(
       task.tenantId,
       { title: "Task overdue", body, url: href },
-      assignment.locationId
+      assignment.locationId,
+      "TASK"
     );
 
     await withTenant(systemKickContext(), (tx) =>

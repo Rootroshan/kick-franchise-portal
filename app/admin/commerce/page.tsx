@@ -7,6 +7,7 @@ import { formatCents } from "@/lib/utils";
 import { PageHeader, KPIStatCard, StatusBadge, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { DataTable, type Column } from "@/components/admin/DataTable";
+import { resolveTableRows } from "@/components/admin/resolveTableRows";
 import { CatalogueTabs } from "@/components/admin/CatalogueTabs";
 import { CreateProductDialog } from "@/components/admin/ProductDialogs";
 import type { ProductRow } from "@/server/modules/commerce/admin";
@@ -66,9 +67,7 @@ export default async function CataloguePage({ searchParams }: { searchParams: Re
       />
 
       <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(p) => p.id}
+        {...resolveTableRows(columns, rows, (p) => p.id)}
         basePath="/admin/commerce"
         currentParams={q.raw}
         sort={q.sort}
