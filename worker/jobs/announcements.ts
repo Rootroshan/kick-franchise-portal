@@ -1,6 +1,5 @@
 import { systemKickContext, withTenant } from "@/server/db/withTenant";
-import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
-import { sendPushToLocationMembers } from "../push/send";
+import { fireAnnouncementPublishedFanOut } from "@/server/modules/announcements/service";
 
 /** Runs every 1 min: flips SCHEDULED -> PUBLISHED where publishAt <= now, then fires inbox + push fan-out. */
 export async function publishScheduledAnnouncements() {
@@ -11,32 +10,17 @@ export async function publishScheduledAnnouncements() {
   );
 
   for (const announcement of toPublish) {
-    await withTenant(systemKickContext(), (tx) =>
+    const published = await withTenant(systemKickContext(), (tx) =>
       tx.announcement.update({ where: { id: announcement.id }, data: { status: "PUBLISHED" } })
     );
 
-    // Same in-app inbox fan-out the immediate-publish path fires
-    // (createAnnouncement) — a cron-published announcement previously sent
-    // push but never lit the bell. Status is flipped above before fan-out, so
-    // the next cron run can't re-notify the same row. A fan-out failure must
-    // never fail the job — the publish itself already happened.
-    await notifyTenantMembers(systemKickContext(), {
-      tenantId: announcement.tenantId,
-      role: "FRANCHISEE_USER",
-      category: "ANNOUNCEMENT",
-      title: announcement.requiresAck ? `Action required: ${announcement.title}` : announcement.title,
-      body: announcement.body.slice(0, 200),
-      href: `/announcements/${announcement.id}`,
-      entity: "Announcement",
-      entityId: announcement.id,
-    }).catch(() => {});
-
-    // Spec: every store in that brand gets a push notification when it publishes.
-    await sendPushToLocationMembers(announcement.tenantId, {
-      title: "New announcement",
-      body: announcement.title,
-      url: `/announcements/${announcement.id}`,
-    });
+    // Same PUBLISHED fan-out the immediate-publish path fires
+    // (createAnnouncement) — including the FRANCHISOR_ADMIN "New announcement
+    // for your brand" bell when the creator was KICK_ADMIN. Status is flipped
+    // above before fan-out, so the next cron run can't re-notify the same
+    // row. A fan-out failure must never fail the job — the publish itself
+    // already happened.
+    await fireAnnouncementPublishedFanOut(systemKickContext(), published).catch(() => {});
   }
 
   return { published: toPublish.length };

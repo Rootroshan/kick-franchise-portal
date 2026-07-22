@@ -9,6 +9,7 @@ export type AdminListQuery = {
   direction: "asc" | "desc";
   from?: string;
   to?: string;
+  date?: string;
   raw: Record<string, string>;
 };
 
@@ -34,6 +35,7 @@ export function parseListQuery(searchParams: Record<string, string | string[] | 
     direction,
     from: get("from") || undefined,
     to: get("to") || undefined,
+    date: get("date") || undefined,
     raw,
   };
 }
@@ -51,3 +53,7 @@ export function buildHref(basePath: string, current: Record<string, string>, ove
 
 export const skip = (q: AdminListQuery) => (q.page - 1) * q.limit;
 export const pageCount = (total: number, limit: number) => Math.max(1, Math.ceil(total / limit));
+
+/** UTC start/end-of-day bounds for a "YYYY-MM-DD" date key, e.g. the Publish Calendar's `date` filter. */
+export const startOfDay = (dateKey: string) => new Date(`${dateKey}T00:00:00.000Z`);
+export const endOfDay = (dateKey: string) => new Date(`${dateKey}T24:00:00.000Z`);

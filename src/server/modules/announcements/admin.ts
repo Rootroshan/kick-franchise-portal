@@ -1,6 +1,6 @@
 import { AnnouncementStatus } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
-import type { AdminListQuery } from "@/lib/adminQuery";
+import { startOfDay, endOfDay, type AdminListQuery } from "@/lib/adminQuery";
 import { z } from "zod";
 
 export type AnnouncementRow = {
@@ -32,6 +32,7 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
       ...(q.search ? { OR: [{ title: { contains: q.search, mode: "insensitive" as const } }, { body: { contains: q.search, mode: "insensitive" as const } }] } : {}),
       ...(q.status && STATUS_VALUES.has(q.status) ? { status: q.status as AnnouncementStatus } : {}),
       ...(q.brand ? { tenant: { slug: q.brand } } : {}),
+      ...(q.date ? { publishAt: { gte: startOfDay(q.date), lt: endOfDay(q.date) } } : {}),
     };
 
     // Pinned always sorts first, regardless of which column the operator

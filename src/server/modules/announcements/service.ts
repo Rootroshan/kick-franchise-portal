@@ -4,7 +4,66 @@ import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
 import { sendPushToLocationMembers } from "../../../../worker/push/send";
 import { HttpError } from "@/server/modules/identity/errors";
 import { z } from "zod";
+import type { Announcement } from "@prisma/client";
 import type { createAnnouncementSchema, updateAnnouncementSchema } from "./schemas";
+
+/**
+ * Shared PUBLISHED fan-out (inbox + conditional FRANCHISOR_ADMIN notify +
+ * push), called from both the immediate-publish path (createAnnouncement)
+ * and the scheduled-publish cron job (worker/jobs/announcements.ts) so the
+ * two paths can't drift — see the KICK_ADMIN branch below, which was
+ * previously only wired up on the immediate path.
+ */
+export async function fireAnnouncementPublishedFanOut(ctx: RequestContext, announcement: Announcement) {
+  await notifyTenantMembers(ctx, {
+    tenantId: announcement.tenantId,
+    role: "FRANCHISEE_USER",
+    category: "ANNOUNCEMENT",
+    title: announcement.requiresAck ? `Action required: ${announcement.title}` : announcement.title,
+    body: announcement.body.slice(0, 200),
+    href: `/announcements/${announcement.id}`,
+    entity: "Announcement",
+    entityId: announcement.id,
+  }).catch(() => {
+    // Never fail the publish because the inbox fan-out failed.
+  });
+
+  // A Kick publish is news to the brand's admins too — they didn't author
+  // it, so their bell should light up. A franchisor publishing their own
+  // announcement gets no self-notification.
+  const creatorMembership = await withTenant(ctx, (tx) =>
+    tx.membership.findFirst({
+      where: { clerkUserId: announcement.createdBy, role: "KICK_ADMIN", tenantId: null },
+      select: { id: true },
+    })
+  );
+  if (creatorMembership) {
+    await notifyTenantMembers(ctx, {
+      tenantId: announcement.tenantId,
+      role: "FRANCHISOR_ADMIN",
+      category: "ANNOUNCEMENT",
+      title: `New announcement for your brand: ${announcement.title}`,
+      body: announcement.body.slice(0, 200),
+      href: `/franchisor/announcements/${announcement.id}`,
+      entity: "Announcement",
+      entityId: announcement.id,
+    }).catch(() => {
+      // Best-effort, same as above.
+    });
+  }
+
+  // Push, with per-recipient email fallback — same call the scheduled-
+  // publish cron job makes (worker/jobs/announcements.ts). Immediate
+  // publish previously only fired the in-app inbox notification above;
+  // a "publish now" announcement got no push at all.
+  await sendPushToLocationMembers(announcement.tenantId, {
+    title: "New announcement",
+    body: announcement.title,
+    url: `/announcements/${announcement.id}`,
+  }).catch(() => {
+    // Never fail the publish because push delivery failed.
+  });
+}
 
 /** KICK_ADMIN and FRANCHISOR_ADMIN may create/manage announcements for their tenant. */
 export async function createAnnouncement(ctx: RequestContext, tenantId: string, input: z.infer<typeof createAnnouncementSchema>) {
@@ -46,48 +105,7 @@ export async function createAnnouncement(ctx: RequestContext, tenantId: string, 
   // row that got rolled back, and a notification failure can't void the
   // announcement itself.
   if (announcement.status === "PUBLISHED") {
-    await notifyTenantMembers(ctx, {
-      tenantId,
-      role: "FRANCHISEE_USER",
-      category: "ANNOUNCEMENT",
-      title: announcement.requiresAck ? `Action required: ${announcement.title}` : announcement.title,
-      body: announcement.body.slice(0, 200),
-      href: `/announcements/${announcement.id}`,
-      entity: "Announcement",
-      entityId: announcement.id,
-    }).catch(() => {
-      // Never fail the publish because the inbox fan-out failed.
-    });
-
-    // A Kick publish is news to the brand's admins too — they didn't author
-    // it, so their bell should light up. A franchisor publishing their own
-    // announcement gets no self-notification.
-    if (ctx.role === "KICK_ADMIN") {
-      await notifyTenantMembers(ctx, {
-        tenantId,
-        role: "FRANCHISOR_ADMIN",
-        category: "ANNOUNCEMENT",
-        title: `New announcement for your brand: ${announcement.title}`,
-        body: announcement.body.slice(0, 200),
-        href: `/franchisor/announcements/${announcement.id}`,
-        entity: "Announcement",
-        entityId: announcement.id,
-      }).catch(() => {
-        // Best-effort, same as above.
-      });
-    }
-
-    // Push, with per-recipient email fallback — same call the scheduled-
-    // publish cron job makes (worker/jobs/announcements.ts). Immediate
-    // publish previously only fired the in-app inbox notification above;
-    // a "publish now" announcement got no push at all.
-    await sendPushToLocationMembers(tenantId, {
-      title: "New announcement",
-      body: announcement.title,
-      url: `/announcements/${announcement.id}`,
-    }).catch(() => {
-      // Never fail the publish because push delivery failed.
-    });
+    await fireAnnouncementPublishedFanOut(ctx, announcement);
   }
 
   return announcement;

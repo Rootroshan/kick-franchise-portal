@@ -163,6 +163,86 @@ export async function getAssetVersionHistory(ctx: RequestContext, assetId: strin
   });
 }
 
+/**
+ * [K,F]: promote an older row in the version chain back to current. There is
+ * no settable "isCurrent" flag — the tail of the `replacesId` chain is what's
+ * current — so this creates a new Asset row copying the target version's
+ * file/metadata, chained via replacesId onto today's head, exactly like a
+ * fresh upload in createAsset(). The old head is archived; the target row
+ * itself is left untouched (it's still v-whatever in the chain).
+ */
+export async function promoteAssetVersion(ctx: RequestContext, assetId: string, targetVersionId: string) {
+  if (ctx.role !== "KICK_ADMIN" && !ctx.tenantId) {
+    throw new HttpError(403, "This action requires a resolved tenant");
+  }
+
+  return withTenant(ctx, async (tx) => {
+    // Walk the chain in this same transaction — getAssetVersionHistory() opens
+    // its own withTenant/$transaction, and nesting a second one here would
+    // race the still-open outer transaction instead of seeing its writes.
+    const anchor = await tx.asset.findFirst({
+      where: { id: assetId, ...(ctx.role === "KICK_ADMIN" ? {} : { tenantId: ctx.tenantId! }) },
+    });
+    if (!anchor) throw new HttpError(404, "Asset not found");
+
+    const chain = [anchor];
+    let cursor = anchor;
+    while (cursor.replacesId) {
+      const previous = await tx.asset.findUnique({ where: { id: cursor.replacesId } });
+      if (!previous || previous.tenantId !== anchor.tenantId) break;
+      chain.push(previous);
+      cursor = previous;
+    }
+    cursor = anchor;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const next = await tx.asset.findFirst({ where: { replacesId: cursor.id, tenantId: anchor.tenantId } });
+      if (!next) break;
+      chain.push(next);
+      cursor = next;
+    }
+    chain.sort((a, b) => a.version - b.version);
+
+    const target = chain.find((a) => a.id === targetVersionId);
+    if (!target) throw new HttpError(404, "Version not found");
+    const head = chain[chain.length - 1]!;
+    if (head.id === targetVersionId) {
+      throw new HttpError(422, "This version is already current");
+    }
+
+    await tx.asset.update({ where: { id: head.id }, data: { status: "ARCHIVED" } });
+
+    const restored = await tx.asset.create({
+      data: {
+        tenantId: target.tenantId,
+        name: target.name,
+        type: target.type,
+        category: target.category,
+        storageKey: target.storageKey,
+        mime: target.mime,
+        sizeBytes: target.sizeBytes,
+        version: head.version + 1,
+        status: "ACTIVE",
+        replacesId: head.id,
+        createdBy: ctx.userId,
+      },
+    });
+
+    await writeAuditLog(tx, {
+      tenantId: restored.tenantId,
+      actorId: ctx.userId,
+      role: ctx.role,
+      action: "asset.versionRestore",
+      entity: "Asset",
+      entityId: restored.id,
+      before: { restoredFromVersionId: targetVersionId, restoredFromVersion: target.version },
+      after: restored,
+    });
+
+    return restored;
+  });
+}
+
 /** [K,F,U]: franchisees see only ACTIVE assets; admins see everything (incl. ARCHIVED/DEPRECATED). */
 export async function listAssets(ctx: RequestContext, tenantId: string | null, filters: { category?: string; search?: string }) {
   return withTenant(ctx, (tx) => {

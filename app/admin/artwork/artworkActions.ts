@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/server/modules/identity/guard";
-import { setAssetStatus } from "@/server/modules/assets/service";
+import { setAssetStatus, promoteAssetVersion } from "@/server/modules/assets/service";
 
 export type BulkActionResult = { ok: boolean; message: string; partial?: boolean };
 
@@ -42,4 +42,17 @@ export async function bulkDeprecateAssetsAction(ids: string[]): Promise<BulkActi
 
 export async function bulkRestoreAssetsAction(ids: string[]): Promise<BulkActionResult> {
   return bulkSetStatus(ids, "ACTIVE", "restored");
+}
+
+/** Restore a specific prior version to current, from the version history table. */
+export async function restoreAssetVersionAction(assetId: string, targetVersionId: string): Promise<BulkActionResult> {
+  const ctx = await requireRole("KICK_ADMIN")();
+  try {
+    await promoteAssetVersion(ctx, assetId, targetVersionId);
+    revalidatePath(`/admin/artwork/${assetId}/versions`);
+    revalidatePath("/admin/artwork");
+    return { ok: true, message: "Version restored." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not restore this version." };
+  }
 }

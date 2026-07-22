@@ -7,7 +7,9 @@ import { getAssetAdminDetail } from "@/server/modules/assets/admin";
 import { HttpError } from "@/server/modules/identity/errors";
 import { PageHeader, StatusBadge } from "@/components/admin/kit";
 import { DownloadAssetButton } from "@/components/admin/artwork/DownloadAssetButton";
+import { RestoreVersionButton } from "@/components/admin/artwork/RestoreVersionButton";
 import { formatBytes } from "@/lib/utils";
+import { restoreAssetVersionAction } from "../../artworkActions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export default async function AssetVersionHistoryPage({ params }: { params: { as
               <th className="px-4 py-2.5 text-left">Status</th>
               <th className="px-4 py-2.5 text-left">Size</th>
               <th className="px-4 py-2.5 text-left">Uploaded</th>
-              <th className="px-4 py-2.5 text-right">Download</th>
+              <th className="px-4 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -55,7 +57,12 @@ export default async function AssetVersionHistoryPage({ params }: { params: { as
                 <td className="px-4 py-2.5 text-muted-foreground">{formatBytes(v.sizeBytes)}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{v.createdAt.toLocaleDateString()}</td>
                 <td className="px-4 py-2.5 text-right">
-                  <DownloadAssetButton assetId={v.id} className="text-primary hover:underline" />
+                  <div className="flex items-center justify-end gap-3">
+                    <DownloadAssetButton assetId={v.id} className="text-primary hover:underline" />
+                    {!v.isCurrent && (
+                      <RestoreVersionButton assetId={params.assetId} targetVersionId={v.id} action={restoreAssetVersionAction} />
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

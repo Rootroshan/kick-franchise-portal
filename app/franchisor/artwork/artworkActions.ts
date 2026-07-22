@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireTenantRole } from "@/server/modules/identity/guard";
-import { setAssetStatus } from "@/server/modules/assets/service";
+import { setAssetStatus, promoteAssetVersion } from "@/server/modules/assets/service";
 import { withTenant } from "@/server/db/withTenant";
 
 export type BulkActionResult = { ok: boolean; message: string; partial?: boolean };
@@ -47,4 +47,17 @@ export async function bulkDeprecateAssetsAction(ids: string[]): Promise<BulkActi
 
 export async function bulkRestoreAssetsAction(ids: string[]): Promise<BulkActionResult> {
   return bulkSetStatus(ids, "ACTIVE", "restored");
+}
+
+/** Restore a specific prior version to current, from the version history table. Tenant-scoped via promoteAssetVersion's own history lookup. */
+export async function restoreAssetVersionAction(assetId: string, targetVersionId: string): Promise<BulkActionResult> {
+  const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
+  try {
+    await promoteAssetVersion(ctx, assetId, targetVersionId);
+    revalidatePath(`/franchisor/artwork/${assetId}/versions`);
+    revalidatePath("/franchisor/artwork");
+    return { ok: true, message: "Version restored." };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Could not restore this version." };
+  }
 }

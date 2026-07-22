@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * CSS-only skeleton shimmer. The animate-pulse gives a subtle pulse effect that
  * communicates loading without being distracting. Respects prefers-reduced-motion.
  */
-function Skeleton({ className }: { className?: string }) {
+export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(

@@ -28,6 +28,12 @@ import { ChangePasswordDialog } from "@/components/franchisee/ChangePasswordDial
 
 export const dynamic = "force-dynamic";
 
+const roleLabel: Record<string, string> = {
+  KICK_ADMIN: "Kick Admin",
+  FRANCHISOR_ADMIN: "Franchisor Admin",
+  FRANCHISEE_USER: "Store User",
+};
+
 export default async function ProfilePage() {
   const ctx = await requireRole("FRANCHISEE_USER")();
 
@@ -88,7 +94,7 @@ export default async function ProfilePage() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-semibold">{name}</span>
-                  <Badge variant="secondary">Store User</Badge>
+                  <Badge variant="secondary">{roleLabel[ctx.role] ?? ctx.role}</Badge>
                 </div>
                 <div className="truncate text-sm text-muted-foreground">{data.membership?.email ?? "—"}</div>
                 {user?.phone && <div className="truncate text-xs text-muted-foreground">{user.phone}</div>}
@@ -102,7 +108,7 @@ export default async function ProfilePage() {
               <CardTitle className="text-sm">Your access</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-3 pt-0 sm:grid-cols-2">
-              <AccessTile icon={UserRound} label="Role" value="Store User" />
+              <AccessTile icon={UserRound} label="Role" value={roleLabel[ctx.role] ?? ctx.role} />
               <AccessTile icon={Building2} label="Brand" value={data.tenant?.name ?? "—"} />
               <AccessTile icon={Store} label="Store" value={data.location?.name ?? "—"} />
               <AccessTile icon={Hash} label="Location code" value={data.location?.storeCode ?? "—"} />

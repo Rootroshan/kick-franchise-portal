@@ -1,7 +1,7 @@
 import { AnnouncementStatus } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { HttpError } from "@/server/modules/identity/errors";
-import type { AdminListQuery } from "@/lib/adminQuery";
+import { startOfDay, endOfDay, type AdminListQuery } from "@/lib/adminQuery";
 
 /**
  * Tenant-scoped announcement list for the franchisor portal: search + status
@@ -37,6 +37,7 @@ export async function listFranchisorAnnouncements(ctx: RequestContext, tenantId:
       ...(statusFilter ? { status: statusFilter } : {}),
       ...(q.raw.pinned === "true" ? { isPinned: true } : {}),
       ...(q.raw.requiresAck === "true" ? { requiresAck: true } : {}),
+      ...(q.date ? { publishAt: { gte: startOfDay(q.date), lt: endOfDay(q.date) } } : {}),
     };
 
     // Pinned always sorts first, even when sorting by title/publishAt — was
