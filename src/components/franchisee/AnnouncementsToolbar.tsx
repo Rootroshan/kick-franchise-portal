@@ -4,9 +4,14 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { FEED_TABS, type FeedTab } from "@/lib/announcementFeed";
 
-export const FEED_TABS = ["All", "Unread", "Pinned", "Acknowledged"] as const;
-export type FeedTab = (typeof FEED_TABS)[number];
+// Re-exported for existing consumers — the values now live in
+// lib/announcementFeed (a plain module) so a server component can read them
+// without tripping the "call some() from the server but some is on the
+// client" production error.
+export { FEED_TABS };
+export type { FeedTab };
 
 /** URL-param driven tabs + search + sort for the announcements feed. */
 export function AnnouncementsToolbar({ tab, sort, q }: { tab: FeedTab; sort: "newest" | "oldest"; q: string }) {

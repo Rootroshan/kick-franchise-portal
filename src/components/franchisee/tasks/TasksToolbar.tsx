@@ -5,25 +5,13 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { TASK_TABS, TASK_SORTS, type TaskTab, type TaskSort } from "@/lib/taskState";
 
-export const TASK_TABS = [
-  { value: "", label: "All Tasks" },
-  { value: "open", label: "Open" },
-  { value: "due_today", label: "Due Today" },
-  { value: "overdue", label: "Overdue" },
-  { value: "completed", label: "Completed" },
-] as const;
-
-export type TaskTab = (typeof TASK_TABS)[number]["value"];
-
-export const TASK_SORTS = [
-  { value: "", label: "Sort: Due date" },
-  { value: "newest", label: "Sort: Newest" },
-  { value: "oldest", label: "Sort: Oldest" },
-  { value: "completed", label: "Sort: Completion date" },
-] as const;
-
-export type TaskSort = (typeof TASK_SORTS)[number]["value"];
+// Re-exported for existing consumers — the values now live in lib/taskState
+// (a plain module) so a server component can read them without tripping the
+// "call some() from the server but some is on the client" production error.
+export { TASK_TABS, TASK_SORTS };
+export type { TaskTab, TaskSort };
 
 /**
  * URL-param driven tabs + debounced search + sort for the Store User tasks

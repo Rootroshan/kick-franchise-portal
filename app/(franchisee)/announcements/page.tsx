@@ -1,7 +1,8 @@
 import { CheckCircle2 } from "lucide-react";
 import { requireRole } from "@/server/modules/identity/guard";
 import { listAnnouncements } from "@/server/modules/announcements/service";
-import { AnnouncementsToolbar, FEED_TABS, type FeedTab } from "@/components/franchisee/AnnouncementsToolbar";
+import { AnnouncementsToolbar } from "@/components/franchisee/AnnouncementsToolbar";
+import { FEED_TABS, type FeedTab } from "@/lib/announcementFeed";
 import { AnnouncementFeedCard, PinnedRailCard, type FeedAnnouncement } from "@/components/franchisee/AnnouncementFeedCard";
 import { EnablePushCard } from "@/components/franchisee/EnablePushCard";
 
