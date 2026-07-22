@@ -143,7 +143,8 @@ export async function getOrderKpis(ctx: RequestContext): Promise<OrderKpis> {
 
 export type OrderDetail = {
   id: string;
-  status: string;
+  orderNumber: number;
+  status: OrderStatus;
   subtotalCents: number;
   cardChargedCents: number;
   allowanceAppliedCents: number;
@@ -153,6 +154,18 @@ export type OrderDetail = {
   storeName: string;
   placedBy: string;
   createdAt: Date;
+  paidAt: Date | null;
+  processingAt: Date | null;
+  shippedAt: Date | null;
+  deliveredAt: Date | null;
+  cancelledAt: Date | null;
+  refundedAt: Date | null;
+  estimatedDeliveryAt: Date | null;
+  carrier: string | null;
+  trackingNumber: string | null;
+  cancellationRequestedAt: Date | null;
+  cancellationRequestedBy: string | null;
+  cancellationReason: string | null;
   lines: Array<{ id: string; productName: string; variantName: string; qty: number; unitPriceCents: number }>;
   refundableCents: number;
 };
@@ -172,6 +185,7 @@ export async function getOrderById(ctx: RequestContext, id: string): Promise<Ord
 
     return {
       id: o.id,
+      orderNumber: o.orderNumber,
       status: o.status,
       subtotalCents: o.subtotalCents,
       cardChargedCents: o.cardChargedCents,
@@ -182,6 +196,18 @@ export async function getOrderById(ctx: RequestContext, id: string): Promise<Ord
       storeName: o.location.name,
       placedBy: o.placedBy,
       createdAt: o.createdAt,
+      paidAt: o.paidAt,
+      processingAt: o.processingAt,
+      shippedAt: o.shippedAt,
+      deliveredAt: o.deliveredAt,
+      cancelledAt: o.cancelledAt,
+      refundedAt: o.refundedAt,
+      estimatedDeliveryAt: o.estimatedDeliveryAt,
+      carrier: o.carrier,
+      trackingNumber: o.trackingNumber,
+      cancellationRequestedAt: o.cancellationRequestedAt,
+      cancellationRequestedBy: o.cancellationRequestedBy,
+      cancellationReason: o.cancellationReason,
       lines: o.lines.map((l) => ({
         id: l.id,
         productName: l.variant.product.name,

@@ -3,7 +3,8 @@ import { requireRole } from "@/server/modules/identity/guard";
 import { listTasksAdmin, getTaskKpis } from "@/server/modules/tasks/admin";
 import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
-import { PageHeader, KPIStatCard, Pagination } from "@/components/admin/kit";
+import { Plus } from "lucide-react";
+import { PageHeader, KPIStatCard, Pagination, PrimaryButtonLink } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { DataTableSection } from "@/components/admin/DataTableSection";
 import type { TaskRow } from "@/server/modules/tasks/admin";
@@ -78,7 +79,11 @@ export default async function TasksPage({ searchParams }: { searchParams: Record
 
   return (
     <div>
-      <PageHeader title="Tasks" description="Operational tasks across all brands, with per-store completion progress." />
+      <PageHeader
+        title="Tasks"
+        description="Operational tasks across all brands, with per-store completion progress."
+        action={<PrimaryButtonLink href="/admin/tasks/new"><Plus className="h-4 w-4" /> New Task</PrimaryButtonLink>}
+      />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KPIStatCard label="Total Tasks" value={kpis.total} icon={ClipboardList} tone="info" />

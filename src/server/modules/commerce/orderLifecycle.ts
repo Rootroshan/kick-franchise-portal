@@ -2,6 +2,7 @@ import { systemKickContext, withTenant } from "@/server/db/withTenant";
 import { accrueRebatesForOrder } from "@/server/modules/rebates/accrual";
 import { appendLedgerCredit } from "@/server/modules/allowances/ledger";
 import { writeAuditLog } from "@/server/modules/identity/audit";
+import { notifyOrderEvent } from "./orderNotifications";
 
 /**
  * Marks an order PAID (called from the Stripe webhook on
@@ -10,15 +11,17 @@ import { writeAuditLog } from "@/server/modules/identity/audit";
  * PAID, this is a no-op (duplicate webhook safe).
  */
 export async function markOrderPaid(orderId: string, cardChargedCents: number) {
-  return withTenant(systemKickContext(), async (tx) => {
+  const updated = await withTenant(systemKickContext(), async (tx) => {
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
-    if (order.status === "PAID" || order.status === "FULFILLED") {
-      return order; // already processed — duplicate webhook delivery
+    // Any status past PENDING means this payment was already processed (or the
+    // order has since moved through fulfilment) — duplicate webhook delivery.
+    if (order.status !== "PENDING") {
+      return order;
     }
 
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { status: "PAID", cardChargedCents },
+      data: { status: "PAID", cardChargedCents, paidAt: new Date() },
     });
 
     await accrueRebatesForOrder(tx, orderId);
@@ -35,10 +38,15 @@ export async function markOrderPaid(orderId: string, cardChargedCents: number) {
 
     return updated;
   });
+
+  if (updated.status === "PAID") {
+    await notifyOrderEvent(orderId, "paid");
+  }
+  return updated;
 }
 
 export async function markOrderFailed(orderId: string) {
-  return withTenant(systemKickContext(), async (tx) => {
+  const updated = await withTenant(systemKickContext(), async (tx) => {
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
     if (order.status !== "PENDING") return order;
 
@@ -69,6 +77,11 @@ export async function markOrderFailed(orderId: string) {
 
     return updated;
   });
+
+  if (updated.status === "FAILED") {
+    await notifyOrderEvent(orderId, "payment_failed");
+  }
+  return updated;
 }
 
 /**
@@ -77,11 +90,11 @@ export async function markOrderFailed(orderId: string) {
  * updates order status. Never edits the original debit row.
  */
 export async function refundOrder(orderId: string, refundAmountCents: number, actorId = "stripe-webhook") {
-  return withTenant(systemKickContext(), async (tx) => {
+  const result = await withTenant(systemKickContext(), async (tx) => {
     const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
     const totalRefundable = order.subtotalCents - order.refundedCents;
     const clampedRefund = Math.min(refundAmountCents, totalRefundable);
-    if (clampedRefund <= 0) return order;
+    if (clampedRefund <= 0) return { order, refunded: false };
 
     const isFullRefund = order.refundedCents + clampedRefund >= order.subtotalCents;
 
@@ -107,6 +120,7 @@ export async function refundOrder(orderId: string, refundAmountCents: number, ac
       data: {
         refundedCents: order.refundedCents + clampedRefund,
         status: isFullRefund ? "REFUNDED" : "PARTIALLY_REFUNDED",
+        ...(isFullRefund ? { refundedAt: new Date() } : {}),
       },
     });
 
@@ -121,8 +135,13 @@ export async function refundOrder(orderId: string, refundAmountCents: number, ac
       after: { refundedCents: updated.refundedCents, status: updated.status, refundAmountCents: clampedRefund },
     });
 
-    return updated;
+    return { order: updated, refunded: true };
   });
+
+  if (result.refunded) {
+    await notifyOrderEvent(orderId, "refunded");
+  }
+  return result.order;
 }
 
 export async function getOrderByPaymentIntentId(paymentIntentId: string) {

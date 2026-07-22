@@ -1,23 +1,28 @@
+import { z } from "zod";
 import { requireRole } from "@/server/modules/identity/guard";
-import { withErrorHandling } from "@/server/lib/apiHandler";
-import { withTenant } from "@/server/db/withTenant";
+import { withErrorHandling, parseSearchParams } from "@/server/lib/apiHandler";
+import { listStoreOrders, getStoreOrderSummary } from "@/server/modules/commerce/storeOrders";
+
+const listQuerySchema = z.object({
+  status: z.enum(["processing", "shipped", "delivered", "cancelled", "refunded", "failed"]).optional(),
+  q: z.string().max(200).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  sort: z.enum(["newest", "oldest", "total_desc", "total_asc"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().positive().max(50).optional(),
+});
 
 /**
- * [K,U]: KICK_ADMIN sees all orders (cross-tenant via withTenant + RLS);
- * FRANCHISEE_USER sees only their own location's orders (RLS-enforced via
- * app.location_id). FRANCHISOR_ADMIN is never allowed here — requireRole()
- * rejects it with 403 before this handler's body executes.
+ * Store User order list: server-side pagination + aggregate summary counts,
+ * scoped to the caller's own (tenant, location) — see storeOrders.ts.
+ * FRANCHISOR_ADMIN gets 403 from requireRole before any query runs;
+ * KICK_ADMIN uses /admin/orders (listOrdersAdmin), not this endpoint.
  */
-export const GET = withErrorHandling(async () => {
-  const ctx = await requireRole("KICK_ADMIN", "FRANCHISEE_USER")();
+export const GET = withErrorHandling(async (req) => {
+  const ctx = await requireRole("FRANCHISEE_USER")();
+  const query = parseSearchParams(req.url, listQuerySchema);
 
-  const orders = await withTenant(ctx, (tx) =>
-    tx.order.findMany({
-      where: ctx.role === "FRANCHISEE_USER" ? { locationId: ctx.locationId! } : undefined,
-      include: { lines: { include: { variant: true } }, location: true },
-      orderBy: { createdAt: "desc" },
-    })
-  );
-
-  return Response.json({ orders });
+  const [list, summary] = await Promise.all([listStoreOrders(ctx, query), getStoreOrderSummary(ctx)]);
+  return Response.json({ ...list, summary });
 });

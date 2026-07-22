@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireRole } from "@/server/modules/identity/guard";
 import { listAnnouncements } from "@/server/modules/announcements/service";
 import { getOwnAllowanceBalance } from "@/server/modules/allowances/admin";
+import { listFranchiseeAssignments } from "@/server/modules/tasks/service";
+import { DashboardTasksCard } from "@/components/franchisee/tasks/DashboardTasksCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCents } from "@/lib/utils";
 import { AnnouncementCard } from "@/components/franchisee/AnnouncementCard";
@@ -13,9 +15,10 @@ export default async function FeedPage() {
   // no non-null assertion smell. The layout still redirects other roles away
   // first; this is the belt to its suspenders.
   const ctx = await requireRole("FRANCHISEE_USER")();
-  const [announcements, balances] = await Promise.all([
+  const [announcements, balances, taskAssignments] = await Promise.all([
     listAnnouncements(ctx, ctx.tenantId),
     getOwnAllowanceBalance(ctx),
+    listFranchiseeAssignments(ctx),
   ]);
 
   const pinned = announcements.filter((a) => a.isPinned);
@@ -45,6 +48,8 @@ export default async function FeedPage() {
           </Link>
         </CardContent>
       </Card>
+
+      <DashboardTasksCard assignments={taskAssignments} />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

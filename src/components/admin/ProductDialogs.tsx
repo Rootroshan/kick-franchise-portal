@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import { Plus, Loader2, X, AlertCircle } from "lucide-react";
 import { createProductAction, createVariantAction } from "@/app/admin/commerce/actions";
+import { PRODUCT_CATEGORIES } from "@/server/modules/commerce/schemas";
 
 type Option = { value: string; label: string };
 
@@ -20,7 +21,8 @@ export function CreateProductDialog({ brandOptions }: { brandOptions: Option[] }
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [form, setForm] = useState({ tenantId: "", name: "", sku: "", active: true });
+  const emptyForm = { tenantId: "", name: "", sku: "", category: "", description: "", imageUrl: "", active: true };
+  const [form, setForm] = useState(emptyForm);
 
   useEscapeToClose(open, () => setOpen(false));
 
@@ -28,10 +30,15 @@ export function CreateProductDialog({ brandOptions }: { brandOptions: Option[] }
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await createProductAction(form);
+      const res = await createProductAction({
+        ...form,
+        category: form.category || null,
+        description: form.description.trim() || null,
+        imageUrl: form.imageUrl.trim() || null,
+      });
       if (res.ok) {
         setOpen(false);
-        setForm({ tenantId: "", name: "", sku: "", active: true });
+        setForm(emptyForm);
       } else {
         setError(res.message);
       }
@@ -83,6 +90,42 @@ export function CreateProductDialog({ brandOptions }: { brandOptions: Option[] }
                 className={inputCls}
                 disabled={pending}
                 required
+              />
+            </Labelled>
+
+            <Labelled label="Category (optional)">
+              <select
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                className={inputCls}
+                disabled={pending}
+              >
+                <option value="">Uncategorised</option>
+                {PRODUCT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </Labelled>
+
+            <Labelled label="Description (optional)">
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                className={inputCls}
+                disabled={pending}
+                rows={3}
+                placeholder="Shown to store users on the product page"
+              />
+            </Labelled>
+
+            <Labelled label="Image URL (optional)">
+              <input
+                type="url"
+                value={form.imageUrl}
+                onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                className={inputCls}
+                disabled={pending}
+                placeholder="https://…"
               />
             </Labelled>
 

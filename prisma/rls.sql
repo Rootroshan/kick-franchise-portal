@@ -338,9 +338,64 @@ DROP POLICY IF EXISTS variant_write ON "ProductVariant";
 CREATE POLICY variant_write ON "ProductVariant" FOR INSERT
   WITH CHECK (current_setting('app.user_role', true) = 'KICK_ADMIN');
 DROP POLICY IF EXISTS variant_update ON "ProductVariant";
+-- FRANCHISEE_USER may update own-tenant active variants ONLY so checkout can
+-- decrement tracked stock inside its transaction. The trigger below narrows
+-- that further: for store users, stock is the only column that may change,
+-- and only downward — price/name/active stay KICK-immutable at the DB layer.
 CREATE POLICY variant_update ON "ProductVariant" FOR UPDATE
-  USING (current_setting('app.user_role', true) = 'KICK_ADMIN')
-  WITH CHECK (current_setting('app.user_role', true) = 'KICK_ADMIN');
+  USING (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR (
+      current_setting('app.user_role', true) = 'FRANCHISEE_USER'
+      AND active = true
+      AND EXISTS (
+        SELECT 1 FROM "Product" p
+        WHERE p.id = "ProductVariant"."productId"
+          AND p."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
+          AND p.active = true
+      )
+    )
+  )
+  WITH CHECK (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR (
+      current_setting('app.user_role', true) = 'FRANCHISEE_USER'
+      AND EXISTS (
+        SELECT 1 FROM "Product" p
+        WHERE p.id = "ProductVariant"."productId"
+          AND p."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
+      )
+    )
+  );
+
+CREATE OR REPLACE FUNCTION enforce_franchisee_stock_decrement_only()
+RETURNS trigger AS $$
+BEGIN
+  IF current_setting('app.user_role', true) = 'FRANCHISEE_USER' THEN
+    -- updatedAt is allowed to change (Prisma stamps it on every update).
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW."productId" IS DISTINCT FROM OLD."productId"
+       OR NEW.name IS DISTINCT FROM OLD.name
+       OR NEW."priceCents" IS DISTINCT FROM OLD."priceCents"
+       OR NEW.currency IS DISTINCT FROM OLD.currency
+       OR NEW.active IS DISTINCT FROM OLD.active
+       OR NEW."shopifyId" IS DISTINCT FROM OLD."shopifyId"
+       OR NEW."createdAt" IS DISTINCT FROM OLD."createdAt" THEN
+      RAISE EXCEPTION 'Store users may only adjust variant stock';
+    END IF;
+    IF OLD.stock IS NULL OR NEW.stock IS NULL OR NEW.stock > OLD.stock OR NEW.stock < 0 THEN
+      RAISE EXCEPTION 'Store users may only decrement tracked stock';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_franchisee_stock_decrement_only ON "ProductVariant";
+CREATE TRIGGER trg_franchisee_stock_decrement_only
+  BEFORE UPDATE ON "ProductVariant"
+  FOR EACH ROW EXECUTE FUNCTION enforce_franchisee_stock_decrement_only();
+
 DROP POLICY IF EXISTS variant_delete ON "ProductVariant";
 CREATE POLICY variant_delete ON "ProductVariant" FOR DELETE
   USING (current_setting('app.user_role', true) = 'KICK_ADMIN');

@@ -3,7 +3,7 @@ import { getRequestContext } from "@/server/modules/identity/requestContext";
 import { HttpError } from "@/server/modules/identity/errors";
 import { withTenant } from "@/server/db/withTenant";
 import { parseTenantTheme } from "@/lib/theme";
-import { getStoreNotifications } from "@/server/modules/notifications/store";
+import { getUnreadCount } from "@/server/modules/notifications/inbox";
 import { CartProvider } from "@/components/franchisee/CartContext";
 import { BottomNav } from "@/components/franchisee/BottomNav";
 import { TopBar } from "@/components/franchisee/TopBar";
@@ -32,9 +32,9 @@ export default async function FranchiseeLayout({ children }: { children: React.R
     tenantId
       ? withTenant(ctx, (tx) => tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true, theme: true } }))
       : Promise.resolve(null),
-    // Reuses the same signal set the store's own /notifications page reads —
-    // no separate count query, no drift between the badge and the list.
-    getStoreNotifications(ctx).then((n) => n.length).catch(() => 0),
+    // Badge = unread rows in the persisted inbox — the same set the
+    // /notifications page lists, and opening an item there clears it.
+    getUnreadCount(ctx).catch(() => 0),
   ]);
   const theme = parseTenantTheme(brand?.theme);
 

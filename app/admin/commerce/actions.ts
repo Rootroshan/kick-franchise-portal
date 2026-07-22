@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/server/modules/identity/guard";
 import { createProduct, updateProduct, createVariant, updateVariant } from "@/server/modules/commerce/products";
+import { PRODUCT_CATEGORIES } from "@/server/modules/commerce/schemas";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -28,6 +29,9 @@ const productInput = z.object({
   tenantId: z.string().uuid("Select a brand."),
   name: z.string().trim().min(1, "Enter a product name.").max(200),
   sku: z.string().trim().min(1, "Enter a SKU.").max(100),
+  category: z.enum(PRODUCT_CATEGORIES).nullable(),
+  description: z.string().trim().max(2000).nullable(),
+  imageUrl: z.string().trim().url("Enter a valid image URL.").max(1000).nullable(),
   active: z.boolean(),
 });
 
@@ -43,6 +47,9 @@ export async function createProductAction(input: unknown): Promise<ActionResult>
     await createProduct(ctx, parsed.data.tenantId, {
       name: parsed.data.name,
       sku: parsed.data.sku,
+      category: parsed.data.category,
+      description: parsed.data.description,
+      imageUrl: parsed.data.imageUrl,
       active: parsed.data.active,
     });
   } catch (err) {

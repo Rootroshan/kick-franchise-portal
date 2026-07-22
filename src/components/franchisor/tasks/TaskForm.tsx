@@ -27,11 +27,14 @@ export function TaskForm({
   stores,
   defaultValues,
   submitLabel = "Save",
+  tenantId,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   stores?: Store[];
   defaultValues?: { title?: string; details?: string; dueAt?: string; selected?: string[] };
   submitLabel?: string;
+  /** KICK_ADMIN create path: the brand the stores belong to (server re-verifies). */
+  tenantId?: string;
 }) {
   const [title, setTitle] = useState(defaultValues?.title ?? "");
   const [query, setQuery] = useState("");
@@ -63,6 +66,7 @@ export function TaskForm({
       }}
       className="flex flex-col gap-5"
     >
+      {tenantId && <input type="hidden" name="tenantId" value={tenantId} />}
       <label htmlFor="title" className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Title <span className="text-status-error">*</span></span>
         <input id="title" name="title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} required className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />

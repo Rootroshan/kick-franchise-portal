@@ -76,7 +76,16 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
     const variantMap = new Map(variants.map((v) => [v.id, v]));
 
     let subtotalCents = 0;
-    const lineInputs: Array<{ variantId: string; qty: number; unitPriceCents: number; productId: string }> = [];
+    const lineInputs: Array<{
+      variantId: string;
+      qty: number;
+      unitPriceCents: number;
+      productId: string;
+      productName: string;
+      variantName: string;
+      sku: string;
+      imageUrl: string | null;
+    }> = [];
     for (const item of req.items) {
       const variant = variantMap.get(item.variantId);
       if (!variant || variant.product.tenantId !== tenantId || !variant.product.active) {
@@ -91,6 +100,13 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
         qty: item.qty,
         unitPriceCents: variant.priceCents,
         productId: variant.productId,
+        // Snapshots: order history must keep rendering correctly even after
+        // the product is later deactivated/renamed (franchisee RLS hides
+        // inactive catalog rows from a live join).
+        productName: variant.product.name,
+        variantName: variant.name,
+        sku: variant.product.sku,
+        imageUrl: variant.product.imageUrl,
       });
     }
     if (subtotalCents <= 0) {
@@ -122,6 +138,26 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
     // If no allowance exists for this period, the full amount goes to card
     // (remainderCents already equals subtotalCents in that case).
 
+    // Decrement tracked stock (untracked stock is null and skipped). The
+    // conditional `stock >= qty` makes this safe under concurrency: the early
+    // read-time check above can race with a parallel checkout, but two
+    // transactions can't both satisfy this guard for the same units — the
+    // loser matches zero rows and the whole transaction rolls back. Runs
+    // BEFORE the Stripe call so a stock failure never leaves an orphaned
+    // PaymentIntent behind.
+    for (const line of lineInputs) {
+      const variant = variantMap.get(line.variantId)!;
+      if (variant.stock !== null) {
+        const updated = await tx.productVariant.updateMany({
+          where: { id: line.variantId, stock: { gte: line.qty } },
+          data: { stock: { decrement: line.qty } },
+        });
+        if (updated.count === 0) {
+          throw new HttpError(422, `Insufficient stock for ${variant.name}`, "INSUFFICIENT_STOCK");
+        }
+      }
+    }
+
     // 5. Create a Stripe PaymentIntent for the remainder, if any.
     let clientSecret: string | null = null;
     let stripePaymentIntentId: string | null = null;
@@ -144,6 +180,9 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
         tenantId,
         locationId,
         status: remainderCents > 0 ? "PENDING" : "PAID",
+        // Allowance-only orders have no card leg, so payment is complete now;
+        // card orders get paidAt stamped by the Stripe webhook.
+        paidAt: remainderCents > 0 ? null : new Date(),
         subtotalCents,
         allowanceAppliedCents,
         cardChargedCents: 0, // set once the webhook confirms payment
@@ -156,6 +195,10 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
             variantId: l.variantId,
             qty: l.qty,
             unitPriceCents: l.unitPriceCents,
+            productName: l.productName,
+            variantName: l.variantName,
+            sku: l.sku,
+            imageUrl: l.imageUrl,
           })),
         },
       },
@@ -170,24 +213,6 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
         deltaCents: allowanceAppliedCents,
         balanceAfter,
       });
-    }
-
-    // Decrement tracked stock (untracked stock is null and skipped). The
-    // conditional `stock >= qty` makes this safe under concurrency: the early
-    // read-time check above can race with a parallel checkout, but two
-    // transactions can't both satisfy this guard for the same units — the
-    // loser matches zero rows and the whole transaction rolls back.
-    for (const line of lineInputs) {
-      const variant = variantMap.get(line.variantId)!;
-      if (variant.stock !== null) {
-        const updated = await tx.productVariant.updateMany({
-          where: { id: line.variantId, stock: { gte: line.qty } },
-          data: { stock: { decrement: line.qty } },
-        });
-        if (updated.count === 0) {
-          throw new HttpError(422, `Insufficient stock for ${variant.name}`, "INSUFFICIENT_STOCK");
-        }
-      }
     }
 
     await writeAuditLog(tx, {

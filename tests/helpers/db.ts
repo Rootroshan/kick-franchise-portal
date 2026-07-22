@@ -39,6 +39,10 @@ export function franchiseeCtx(
  */
 export async function resetDatabase() {
   await authPrisma.auditLog.deleteMany();
+  // Notification has no DELETE RLS policy either (deny-all by omission, like
+  // AuditLog) — tx.notification.deleteMany() under the RLS-enforced app role
+  // silently matches 0 rows, so this must go through the schema-owner connection.
+  await authPrisma.notification.deleteMany();
   await withTenant(kickCtx(), async (tx) => {
     // Platform-wide, no FK references — safe to clear first. Must be reset or
     // a row from one test leaks into the next and collides on the primary key.
@@ -63,6 +67,12 @@ export async function resetDatabase() {
     await tx.announcementRead.deleteMany();
     await tx.announcement.deleteMany();
     await tx.pushSubscription.deleteMany();
+    // Notification is handled above via authPrisma (no DELETE RLS policy).
+    // Tenant-scoped memberships cascade with tenant.deleteMany() below, but a
+    // platform-wide KICK_ADMIN membership (tenantId null) has no tenant FK to
+    // cascade from and must be cleared explicitly, or it leaks across tests
+    // that reuse the same clerkUserId (e.g. "kick-admin-1").
+    await tx.membership.deleteMany({ where: { tenantId: null } });
     await tx.processedStripeEvent.deleteMany();
     await tx.customDomain.deleteMany();
     await tx.membership.deleteMany();

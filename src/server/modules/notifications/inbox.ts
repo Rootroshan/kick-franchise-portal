@@ -1,5 +1,5 @@
 import type { NotificationCategory } from "@prisma/client";
-import { withTenant, type RequestContext } from "@/server/db/withTenant";
+import { withTenant, systemKickContext, type RequestContext } from "@/server/db/withTenant";
 
 /**
  * Per-user notification inbox.
@@ -86,8 +86,26 @@ export type CreateNotificationInput = {
  * (clerkUserId, entity, entityId, category) by a unique index, so re-running an
  * event handler (or a worker retry) won't spam the same person twice.
  */
-export async function createNotification(ctx: RequestContext, input: CreateNotificationInput): Promise<void> {
-  await withTenant(ctx, async (tx) => {
+export async function createNotification(_ctx: RequestContext, input: CreateNotificationInput): Promise<void> {
+  // The insert must run under the system context, not the actor's: Prisma's
+  // create() is INSERT…RETURNING, and the Notification SELECT policy only
+  // matches the RECIPIENT (or KICK_ADMIN). A franchisor fanning out to store
+  // users would otherwise fail RLS on the RETURNING step and silently create
+  // nothing. Inputs are always constructed by trusted server code, and the
+  // caller-context membership lookup in notifyTenantMembers still enforces
+  // tenant scoping on WHO gets addressed.
+  await withTenant(systemKickContext(), async (tx) => {
+    // Respect the recipient's per-category opt-out (Membership.notificationPrefs,
+    // see notifications/prefs.ts). Every in-app notification routes through
+    // here — fan-outs and direct sends alike — so this is the one place the
+    // preference needs enforcing. Absent key / no membership = opted in.
+    const member = await tx.membership.findFirst({
+      where: { clerkUserId: input.clerkUserId, tenantId: input.tenantId ?? null },
+      select: { notificationPrefs: true },
+    });
+    const prefs = (member?.notificationPrefs ?? {}) as Record<string, unknown>;
+    if (prefs[input.category] === false) return;
+
     try {
       await tx.notification.create({
         data: {

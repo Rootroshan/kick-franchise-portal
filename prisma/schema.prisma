@@ -43,9 +43,14 @@ enum TaskStatus {
 enum OrderStatus {
   PENDING
   PAID
+  /// Fulfilment lifecycle (KICK_ADMIN-driven): PAID → PROCESSING → SHIPPED → DELIVERED.
+  PROCESSING
+  SHIPPED
+  DELIVERED
   CANCELLED
   REFUNDED
   PARTIALLY_REFUNDED
+  /// Legacy terminal state predating the shipping workflow; displayed as Delivered.
   FULFILLED
   FAILED
 }
@@ -104,6 +109,10 @@ enum NotificationCategory {
   ONBOARDING
   ARTWORK
   SYSTEM
+  /// Order lifecycle events (placed/paid/processing/shipped/delivered/cancelled/
+  /// refunded). Recipient-scoped like every category — RLS is per-clerkUserId,
+  /// and ORDER rows are only ever addressed to the store's own members.
+  ORDER
 }
 
 // ---------- Tenancy ----------
@@ -230,6 +239,9 @@ model Membership {
   storeRole   StoreRole?
   displayName String?
   email       String?
+  /// Per-category notification opt-outs, e.g. { "ANNOUNCEMENT": false }.
+  /// Absent key = opted in (default on). Checked by createNotification().
+  notificationPrefs Json @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -463,6 +475,9 @@ model LocationOrderingRule {
 
 model Order {
   id                    String      @id @default(uuid())
+  /// Customer-facing sequential reference (rendered e.g. "VS-1025"). The uuid
+  /// id stays internal — it is never the primary number a store user sees.
+  orderNumber           Int         @unique @default(autoincrement())
   tenantId              String
   locationId            String
   status                OrderStatus @default(PENDING)
@@ -474,8 +489,32 @@ model Order {
   stripePaymentIntentId String?     @unique
   idempotencyKey        String      @unique
   placedBy              String
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+
+  // Lifecycle timestamps — each is stamped by the single code path that owns
+  // that transition (webhook for paidAt, fulfilment module for the rest), so
+  // the status timeline never shows a step without a real backend event.
+  paidAt              DateTime?
+  processingAt        DateTime?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  cancelledAt         DateTime?
+  refundedAt          DateTime?
+  estimatedDeliveryAt DateTime?
+
+  /// Shipment data. Only set by KICK_ADMIN fulfilment; the tracking URL is
+  /// derived server-side from the carrier's known template — an arbitrary URL
+  /// is never stored, so an unsafe link can never reach the store user.
+  carrier        String?
+  trackingNumber String?
+
+  /// Store-user cancellation request (does NOT change status by itself —
+  /// KICK_ADMIN decides). Cleared implicitly when the order terminates.
+  cancellationRequestedAt DateTime?
+  cancellationRequestedBy String?
+  cancellationReason      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location      Location          @relation(fields: [locationId], references: [id], onDelete: Cascade)
@@ -483,6 +522,7 @@ model Order {
   ledgerEntries AllowanceLedger[]
 
   @@index([tenantId, locationId, status])
+  @@index([locationId, createdAt])
   @@index([stripePaymentIntentId])
 }
 
@@ -492,6 +532,14 @@ model OrderLine {
   variantId      String
   qty            Int
   unitPriceCents Int // price snapshot at order time — never recompute from current price
+  /// Display snapshots taken at checkout. Order history must render even after
+  /// the product is deactivated/renamed — franchisee RLS hides inactive
+  /// catalog rows, so joining the live catalog from a store context breaks.
+  /// Nullable only for pre-migration rows; the migration backfills all.
+  productName String?
+  variantName String?
+  sku         String?
+  imageUrl    String?
 
   order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant        ProductVariant  @relation(fields: [variantId], references: [id])

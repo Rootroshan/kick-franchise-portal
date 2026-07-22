@@ -29,6 +29,9 @@ type OrderItem = {
 const STATUS_VARIANT: Record<OrderStatus, "success" | "warning" | "destructive" | "muted"> = {
   PAID: "success",
   FULFILLED: "success",
+  PROCESSING: "warning",
+  SHIPPED: "success",
+  DELIVERED: "success",
   PENDING: "warning",
   CANCELLED: "muted",
   FAILED: "destructive",
