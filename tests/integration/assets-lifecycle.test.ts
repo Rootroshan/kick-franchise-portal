@@ -15,7 +15,7 @@ vi.mock("@/server/lib/storage", () => ({
 const { createAsset, listAssets, setAssetStatus, getAssetDownloadUrl, updateAssetMetadata, getAssetVersionHistory } = await import(
   "@/server/modules/assets/service"
 );
-const { listAssetsAdmin } = await import("@/server/modules/assets/admin");
+const { listAssetsAdmin, getAssetKpis } = await import("@/server/modules/assets/admin");
 const { listFranchisorAssets } = await import("@/server/modules/assets/franchisorList");
 const { parseListQuery } = await import("@/lib/adminQuery");
 
@@ -172,5 +172,43 @@ describe("Assets: upload, versioning, lifecycle, tenant isolation", () => {
     // Looking up from an older version in the chain returns the same full chain.
     const historyFromV1 = await getAssetVersionHistory(kickCtx(), v1.id);
     expect(historyFromV1.map((h) => h.id)).toEqual(history.map((h) => h.id));
+  });
+
+  it("franchisor cannot read another tenant's version history but can read their own", async () => {
+    const a = await seedTenantWithLocation();
+    const b = await seedTenantWithLocation();
+    const asset = await createAsset(kickCtx(), a.tenant.id, upload());
+
+    await expect(getAssetVersionHistory(franchisorCtx(b.tenant.id), asset.id)).rejects.toThrow();
+
+    const own = await getAssetVersionHistory(franchisorCtx(a.tenant.id), asset.id);
+    expect(own.map((h) => h.id)).toEqual([asset.id]);
+  });
+
+  it("franchisor cannot change the status of another tenant's asset", async () => {
+    const a = await seedTenantWithLocation();
+    const b = await seedTenantWithLocation();
+    const asset = await createAsset(kickCtx(), a.tenant.id, upload());
+
+    await expect(setAssetStatus(franchisorCtx(b.tenant.id), asset.id, "ARCHIVED")).rejects.toThrow();
+
+    const reloaded = await withTenant(kickCtx(), (tx) => tx.asset.findUnique({ where: { id: asset.id } }));
+    expect(reloaded?.status).toBe("ACTIVE");
+  });
+
+  it("a successful download writes an asset.download audit row that feeds the Downloads KPI", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const asset = await createAsset(kickCtx(), tenant.id, upload());
+
+    await getAssetDownloadUrl(franchiseeCtx(tenant.id, location.id), asset.id);
+    await getAssetDownloadUrl(franchisorCtx(tenant.id), asset.id);
+
+    const logs = await withTenant(kickCtx(), (tx) =>
+      tx.auditLog.findMany({ where: { entity: "Asset", entityId: asset.id, action: "asset.download" } })
+    );
+    expect(logs).toHaveLength(2);
+
+    const kpis = await getAssetKpis(kickCtx());
+    expect(kpis.totalDownloads).toBe(2);
   });
 });

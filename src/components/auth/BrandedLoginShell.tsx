@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { AlertTriangle, Clock } from "lucide-react";
+import { BrandMark } from "@/components/layout/BrandMark";
 import { resolveTenantFromHost, diagnoseUnresolvedHost } from "@/server/modules/identity/tenantResolution";
 import { parseTenantTheme } from "@/lib/theme";
 import { RoleLoginForm } from "@/components/auth/RoleLoginForm";
@@ -84,25 +84,9 @@ export async function BrandedLoginShell({
       }
     >
       <div className="mb-8 flex flex-col items-center gap-3">
-        {theme.logoUrl ? (
-          // Brand-supplied logo. Dimensions are fixed and object-contain so an
-          // unexpected aspect ratio cannot blow out the layout.
-          <Image
-            src={theme.logoUrl}
-            alt={tenant.name}
-            width={180}
-            height={64}
-            className="h-16 w-auto max-w-[180px] object-contain"
-            unoptimized
-          />
-        ) : (
-          <span
-            className="flex h-14 w-14 items-center justify-center rounded-xl text-xl font-black text-white"
-            style={{ backgroundColor: theme.primary }}
-          >
-            {tenant.name.charAt(0).toUpperCase()}
-          </span>
-        )}
+        {/* Logo only when one exists (name as alt text); brand name text
+            otherwise — including when the logo URL fails to load. */}
+        <BrandMark name={tenant.name} logoUrl={theme.logoUrl} imgClassName="h-16" nameClassName="text-2xl font-bold" />
       </div>
 
       <RoleLoginForm role={role} heading={heading} description={description} brandName={tenant.name} />

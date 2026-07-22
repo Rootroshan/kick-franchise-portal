@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, RotateCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type FilterDef = { key: string; label: string; options: Array<{ value: string; label: string }> };
 
@@ -11,7 +12,15 @@ export type FilterDef = { key: string; label: string; options: Array<{ value: st
  * to the query string (?search=&status=&brand=…) and resets to page 1, so the
  * server component re-fetches. No client-side data fetching.
  */
-export function ListToolbar({ filters = [], searchPlaceholder = "Search…" }: { filters?: FilterDef[]; searchPlaceholder?: string }) {
+export function ListToolbar({
+  filters = [],
+  searchPlaceholder = "Search…",
+  className,
+}: {
+  filters?: FilterDef[];
+  searchPlaceholder?: string;
+  className?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -54,7 +63,7 @@ export function ListToolbar({ filters = [], searchPlaceholder = "Search…" }: {
   };
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className={cn("mb-3 flex flex-wrap items-center gap-2", className)}>
       <div className="relative min-w-[180px] flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input

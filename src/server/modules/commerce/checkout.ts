@@ -172,14 +172,21 @@ export async function checkout(ctx: RequestContext, tenantId: string, req: Check
       });
     }
 
-    // Decrement tracked stock (best-effort; untracked stock is null and skipped).
+    // Decrement tracked stock (untracked stock is null and skipped). The
+    // conditional `stock >= qty` makes this safe under concurrency: the early
+    // read-time check above can race with a parallel checkout, but two
+    // transactions can't both satisfy this guard for the same units — the
+    // loser matches zero rows and the whole transaction rolls back.
     for (const line of lineInputs) {
       const variant = variantMap.get(line.variantId)!;
       if (variant.stock !== null) {
-        await tx.productVariant.update({
-          where: { id: line.variantId },
+        const updated = await tx.productVariant.updateMany({
+          where: { id: line.variantId, stock: { gte: line.qty } },
           data: { stock: { decrement: line.qty } },
         });
+        if (updated.count === 0) {
+          throw new HttpError(422, `Insufficient stock for ${variant.name}`, "INSUFFICIENT_STOCK");
+        }
       }
     }
 

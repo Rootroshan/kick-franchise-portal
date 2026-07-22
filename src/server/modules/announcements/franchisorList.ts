@@ -21,6 +21,7 @@ export type FranchisorAnnouncementRow = {
   ackCount: number;
   targetStores: number;
   readPercent: number;
+  updatedAt: Date;
 };
 
 export type AnnouncementListResult = { rows: FranchisorAnnouncementRow[]; total: number; counts: Record<string, number> };
@@ -64,6 +65,7 @@ export async function listFranchisorAnnouncements(ctx: RequestContext, tenantId:
       ackCount: a._count.acks,
       targetStores: activeStores,
       readPercent: a.requiresAck ? Math.min(100, Math.round((a._count.acks / target) * 100)) : 0,
+      updatedAt: a.updatedAt,
     }));
 
     const counts: Record<string, number> = { all: 0 };

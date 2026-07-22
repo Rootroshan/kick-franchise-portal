@@ -1,13 +1,26 @@
 import { z } from "zod";
 
+/** Store-facing catalog categories. Kept as data (not a DB enum) so adding one
+ *  is a deploy, not a migration. Icons/descriptions live in the shop UI. */
+export const PRODUCT_CATEGORIES = ["Apparel", "Kitchenware", "Packaging", "Signage", "Promotional"] as const;
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+
+const categorySchema = z.enum(PRODUCT_CATEGORIES).nullable().optional();
+
 export const createProductSchema = z.object({
   name: z.string().min(1).max(200),
   sku: z.string().min(1).max(100),
+  category: categorySchema,
+  description: z.string().max(2000).nullable().optional(),
+  imageUrl: z.string().url().max(1000).nullable().optional(),
   active: z.boolean().optional().default(true),
 });
 
 export const updateProductSchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  category: categorySchema,
+  description: z.string().max(2000).nullable().optional(),
+  imageUrl: z.string().url().max(1000).nullable().optional(),
   active: z.boolean().optional(),
 });
 

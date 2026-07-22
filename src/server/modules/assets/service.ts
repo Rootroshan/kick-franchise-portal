@@ -204,12 +204,26 @@ export async function setAssetStatus(ctx: RequestContext, assetId: string, statu
 /**
  * Signed download URL, expiring within 5 minutes (spec §14/§10.2). Franchisees
  * may only download ACTIVE assets in their own tenant; RLS enforces this too.
+ * Every successful download writes an `asset.download` audit row here — the
+ * single choke point all download routes go through — which feeds the
+ * Artwork Hub "Total Downloads" KPI.
  */
 export async function getAssetDownloadUrl(ctx: RequestContext, assetId: string): Promise<string> {
-  const asset = await withTenant(ctx, (tx) => tx.asset.findUnique({ where: { id: assetId } }));
-  if (!asset) throw new HttpError(404, "Asset not found");
-  if (ctx.role === "FRANCHISEE_USER" && asset.status !== "ACTIVE") {
-    throw new HttpError(404, "Asset not found");
-  }
+  const asset = await withTenant(ctx, async (tx) => {
+    const a = await tx.asset.findUnique({ where: { id: assetId } });
+    if (!a) throw new HttpError(404, "Asset not found");
+    if (ctx.role === "FRANCHISEE_USER" && a.status !== "ACTIVE") {
+      throw new HttpError(404, "Asset not found");
+    }
+    await writeAuditLog(tx, {
+      tenantId: a.tenantId,
+      actorId: ctx.userId,
+      role: ctx.role,
+      action: "asset.download",
+      entity: "Asset",
+      entityId: a.id,
+    });
+    return a;
+  });
   return createPresignedDownloadUrl(asset.storageKey, 300);
 }

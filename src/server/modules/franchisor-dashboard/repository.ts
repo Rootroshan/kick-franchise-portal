@@ -17,9 +17,12 @@ export type EngagementCounts = {
   activeStores: number;
   totalStores: number;
   brandAdmins: number;
-  // announcements read
+  // announcements acknowledged (compliance)
   ackDone: number;
   ackOpportunities: number;
+  // announcements read (opened) — distinct from acknowledgement
+  readDone: number;
+  readOpportunities: number;
   // tasks
   taskTotal: number;
   taskCompleted: number;
@@ -45,6 +48,9 @@ export async function periodCounts(ctx: RequestContext, tenantId: string, range:
       brandAdmins,
       requiredAnns,
       ackDone,
+      publishedAnns,
+      readDone,
+      franchiseeUsers,
       taskAgg,
       onbTotal,
       onbDone,
@@ -56,6 +62,10 @@ export async function periodCounts(ctx: RequestContext, tenantId: string, range:
       // acknowledgement opportunities = (required announcements published in range) × (active stores)
       tx.announcement.count({ where: { tenantId, requiresAck: true, publishAt: { gte: range.start, lt: range.end } } }),
       tx.announcementAck.count({ where: { acknowledgedAt: { gte: range.start, lt: range.end }, announcement: { tenantId, requiresAck: true } } }),
+      // read opportunities = (announcements published in range, incl. since-expired) × (store users)
+      tx.announcement.count({ where: { tenantId, status: { in: ["PUBLISHED", "EXPIRED"] }, publishAt: { gte: range.start, lt: range.end } } }),
+      tx.announcementRead.count({ where: { readAt: { gte: range.start, lt: range.end }, announcement: { tenantId } } }),
+      tx.membership.count({ where: { tenantId, role: "FRANCHISEE_USER" } }),
       tx.taskAssignment.groupBy({
         by: ["status"],
         where: { task: { tenantId }, createdAt: { gte: range.start, lt: range.end } },
@@ -83,6 +93,8 @@ export async function periodCounts(ctx: RequestContext, tenantId: string, range:
       brandAdmins,
       ackDone,
       ackOpportunities: requiredAnns * activeStoresForAck,
+      readDone,
+      readOpportunities: publishedAnns * franchiseeUsers,
       taskTotal,
       taskCompleted,
       taskOpen,

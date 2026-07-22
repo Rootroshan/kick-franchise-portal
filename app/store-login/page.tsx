@@ -22,7 +22,7 @@ export default async function StoreLoginPage() {
     <BrandedLoginShell
       host={host}
       role="FRANCHISEE_USER"
-      heading="Sign in to Volt Studios Portal"
+      heading="Sign in to your store portal"
       description="Access your store tasks, announcements, artwork, onboarding and available services."
     />
   );

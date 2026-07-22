@@ -22,11 +22,17 @@ type Props = {
   returnTo: string;
   /** Brand selector — KICK_ADMIN only. Omit for franchisor uploads (tenant is implicit). */
   brandOptions?: BrandOption[];
+  /**
+   * Fixed target tenant — KICK_ADMIN replace flow only, where the brand is
+   * dictated by the asset being replaced rather than picked from a selector.
+   * Omit for franchisor uploads (tenant is server-derived from the session).
+   */
+  fixedTenantId?: string;
   /** Present when this form is replacing an existing asset with a new version. */
   replaces?: { id: string; name: string; category: string | null; type: string };
 };
 
-export function UploadArtworkForm({ returnTo, brandOptions, replaces }: Props) {
+export function UploadArtworkForm({ returnTo, brandOptions, fixedTenantId, replaces }: Props) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -62,12 +68,17 @@ export function UploadArtworkForm({ returnTo, brandOptions, replaces }: Props) {
     if (!file) return toast.error("Choose a file to upload.");
     if (brandOptions && !tenantId) return toast.error("Choose a brand.");
 
+    // KICK_ADMIN must always name the target brand — from the selector on new
+    // uploads, or fixed to the replaced asset's brand on the replace flow.
+    // Franchisors send nothing; their tenant is derived server-side.
+    const targetTenantId = brandOptions ? tenantId : fixedTenantId;
+
     setUploading(true);
     setProgress(0);
     try {
       const signed = await fetchJson<{ uploadUrl: string; storageKey: string }>("/api/assets/upload-url", {
         method: "POST",
-        body: JSON.stringify({ mime: file.type, sizeBytes: file.size, ...(brandOptions ? { tenantId } : {}) }),
+        body: JSON.stringify({ mime: file.type, sizeBytes: file.size, ...(targetTenantId ? { tenantId: targetTenantId } : {}) }),
       });
 
       await new Promise<void>((resolve, reject) => {
@@ -92,7 +103,7 @@ export function UploadArtworkForm({ returnTo, brandOptions, replaces }: Props) {
           replacesId: replaces?.id ?? null,
           versionNotes: versionNotes.trim() || null,
           publishActive,
-          ...(brandOptions ? { tenantId } : {}),
+          ...(targetTenantId ? { tenantId: targetTenantId } : {}),
         }),
       });
 

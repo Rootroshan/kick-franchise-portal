@@ -77,6 +77,7 @@ export function AcknowledgementReportView({
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 font-medium">Email</th>
                 <th className="px-4 py-2.5 font-medium">Store</th>
+                <th className="px-4 py-2.5 font-medium">Read</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">Acknowledged</th>
               </tr>
@@ -87,13 +88,16 @@ export function AcknowledgementReportView({
                   <td className="px-4 py-2.5 font-medium">{u.displayName ?? "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{u.email ?? "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{u.locationName ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">
+                    {u.readAt ? u.readAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unread"}
+                  </td>
                   <td className="px-4 py-2.5"><StatusBadge status={u.pending ? "pending" : "verified"} /></td>
                   <td className="px-4 py-2.5 text-muted-foreground">{u.acknowledgedAt ? u.acknowledgedAt.toLocaleDateString() : "—"}</td>
                 </tr>
               ))}
               {users.rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">No users found.</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">No users found.</td>
                 </tr>
               )}
             </tbody>

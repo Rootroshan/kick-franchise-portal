@@ -35,19 +35,23 @@ describe("Franchisor dashboard service", () => {
     await expect(getFranchisorDashboard({ ...kickCtx(), tenantId: tenant.id }, {})).rejects.toThrow(/franchisor admins/i);
   });
 
-  it("computes announcement-read percentage from acks", async () => {
+  it("computes announcement-read percentage from real read records (not acks)", async () => {
     const { tenant, location } = await seedTenantWithLocation();
     const ann = await withTenant(kickCtx(), (tx) =>
-      tx.announcement.create({ data: { tenantId: tenant.id, title: "Ack me", body: "x", status: "PUBLISHED", requiresAck: true, publishAt: new Date(), createdBy: "seed" } })
+      tx.announcement.create({ data: { tenantId: tenant.id, title: "Read me", body: "x", status: "PUBLISHED", publishAt: new Date(), createdBy: "seed" } })
     );
+    // One eligible store user, who has opened the announcement.
     await withTenant(kickCtx(), (tx) =>
-      tx.announcementAck.create({ data: { announcementId: ann.id, clerkUserId: "u1", locationId: location.id, acknowledgedAt: new Date() } })
+      tx.membership.create({ data: { clerkUserId: "u1", tenantId: tenant.id, locationId: location.id, role: "FRANCHISEE_USER" } })
     );
+    await withTenant(kickCtx(), (tx) => tx.announcementRead.create({ data: { announcementId: ann.id, clerkUserId: "u1" } }));
 
     const dash = await getFranchisorDashboard(franchisorCtx(tenant.id), {});
     const kpi = dash.kpis.find((k) => k.key === "announcementsRead");
+    // No requiresAck announcement exists at all — the metric must still be
+    // available, because it now measures opens, not acknowledgements.
     expect(kpi?.available).toBe(true);
-    // 1 ack / (1 required ann × 1 active store) = 100%
+    // 1 read / (1 published ann × 1 eligible store user) = 100%
     expect(kpi?.raw).toBe(100);
   });
 

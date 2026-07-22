@@ -116,6 +116,29 @@ CREATE POLICY announcement_ack_rw ON "AnnouncementAck"
     )
   );
 
+-- Mirrors announcement_ack_rw exactly: read rows are visible tenant-wide (via
+-- the parent announcement's tenant), but only a FRANCHISEE_USER may write
+-- their own read row.
+ALTER TABLE "AnnouncementRead" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "AnnouncementRead" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS announcement_read_rw ON "AnnouncementRead";
+CREATE POLICY announcement_read_rw ON "AnnouncementRead"
+  USING (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR EXISTS (
+      SELECT 1 FROM "Announcement" a
+      WHERE a.id = "AnnouncementRead"."announcementId"
+        AND a."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')
+    )
+  )
+  WITH CHECK (
+    current_setting('app.user_role', true) = 'KICK_ADMIN'
+    OR (
+      current_setting('app.user_role', true) = 'FRANCHISEE_USER'
+      AND "clerkUserId" = current_setting('app.user_id', true)
+    )
+  );
+
 -- ============================================================================
 -- Brand Asset Hub
 -- ============================================================================

@@ -1,7 +1,10 @@
+import type { TaskStatus } from "@prisma/client";
 import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { notifyTenantMembers } from "@/server/modules/notifications/inbox";
 import { HttpError } from "@/server/modules/identity/errors";
+import { formatDate } from "@/lib/utils";
+import { sendPushToLocationMembers } from "../../../../worker/push/send";
 import type { z } from "zod";
 import type { createTaskSchema } from "./schemas";
 
@@ -41,21 +44,32 @@ export async function createTask(ctx: RequestContext, tenantId: string, input: z
   });
 
   // Notify each assigned store's users after commit. One notification per
-  // location so a user only hears about their own store's work.
-  const due = task.dueAt ? ` — due ${task.dueAt.toLocaleDateString()}` : "";
+  // location so a user only hears about their own store's work, and each
+  // links to that store's OWN assignment detail page — the dedupe key
+  // (entity=TaskAssignment) keeps a worker retry from double-notifying.
+  const body = task.dueAt ? `${task.title} is due ${formatDate(task.dueAt)}.` : task.title;
+  const assignmentByLocation = new Map(task.assignments.map((a) => [a.locationId, a.id]));
   for (const loc of locations) {
+    const assignmentId = assignmentByLocation.get(loc.id)!;
     await notifyTenantMembers(ctx, {
       tenantId,
       locationId: loc.id,
       role: "FRANCHISEE_USER",
       category: "TASK",
-      title: `New task: ${task.title}`,
-      body: `Assigned to ${loc.name}${due}`,
-      href: "/tasks",
-      entity: "Task",
-      entityId: task.id,
+      title: "New task assigned",
+      body,
+      href: `/tasks/${assignmentId}`,
+      entity: "TaskAssignment",
+      entityId: assignmentId,
     }).catch(() => {
       // Inbox fan-out must never fail task creation.
+    });
+    await sendPushToLocationMembers(
+      tenantId,
+      { title: "New task assigned", body, url: `/tasks/${assignmentId}` },
+      loc.id
+    ).catch(() => {
+      // Push delivery must never fail task creation either.
     });
   }
 
@@ -102,6 +116,51 @@ export async function completeTaskAssignment(ctx: RequestContext, assignmentId: 
       where: { id: assignmentId },
       data: { status: "COMPLETED", completedAt: new Date(), completedBy: ctx.userId },
     });
+  });
+}
+
+export type FranchiseeAssignmentRow = {
+  id: string;
+  taskId: string;
+  title: string;
+  details: string | null;
+  dueAt: Date | null;
+  createdAt: Date;
+  status: TaskStatus;
+  completedAt: Date | null;
+};
+
+/**
+ * [U]: every assignment for the caller's own location, assignment-major (the
+ * Store User portal navigates by assignment id so completion stays scoped to
+ * one store). Single query; summary counts and tab filters are derived from
+ * this in the page — a store's assignment list is small.
+ */
+export async function listFranchiseeAssignments(ctx: RequestContext): Promise<FranchiseeAssignmentRow[]> {
+  if (ctx.role !== "FRANCHISEE_USER" || !ctx.locationId) {
+    throw new HttpError(403, "Only franchisee users have task assignments");
+  }
+  return withTenant(ctx, async (tx) => {
+    const rows = await tx.taskAssignment.findMany({
+      where: { locationId: ctx.locationId!, task: { tenantId: ctx.tenantId ?? undefined } },
+      orderBy: [{ task: { dueAt: "asc" } }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        status: true,
+        completedAt: true,
+        task: { select: { id: true, title: true, details: true, dueAt: true, createdAt: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      taskId: r.task.id,
+      title: r.task.title,
+      details: r.task.details,
+      dueAt: r.task.dueAt,
+      createdAt: r.task.createdAt,
+      status: r.status,
+      completedAt: r.completedAt,
+    }));
   });
 }
 

@@ -32,6 +32,7 @@ enum AnnouncementStatus {
   SCHEDULED
   PUBLISHED
   EXPIRED
+  ARCHIVED
 }
 
 enum TaskStatus {
@@ -256,8 +257,9 @@ model Announcement {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   acks   AnnouncementAck[]
+  reads  AnnouncementRead[]
 
   @@index([tenantId, status, isPinned])
   @@index([tenantId, publishAt])
@@ -276,6 +278,21 @@ model AnnouncementAck {
 
   @@unique([announcementId, clerkUserId])
   @@index([announcementId])
+}
+
+/// Per-user "has opened this announcement" state — powers the Unread tab and
+/// the unread dot in the store feed. Distinct from AnnouncementAck, which is
+/// the explicit compliance action.
+model AnnouncementRead {
+  id             String   @id @default(uuid())
+  announcementId String
+  clerkUserId    String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, clerkUserId])
+  @@index([clerkUserId])
 }
 
 // ---------- Brand Asset Hub ----------
@@ -386,14 +403,17 @@ model OnboardingProgress {
 // ---------- Commerce (KICK-CONTROLLED — no FRANCHISOR_ADMIN access at any layer) ----------
 
 model Product {
-  id        String   @id @default(uuid())
-  tenantId  String
-  name      String
-  sku       String
-  active    Boolean  @default(true)
-  shopifyId String? // for idempotent Shopify migration re-runs
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  sku         String
+  category    String? // one of PRODUCT_CATEGORIES (commerce/schemas.ts); null = uncategorised
+  description String?
+  imageUrl    String?
+  active      Boolean  @default(true)
+  shopifyId   String? // for idempotent Shopify migration re-runs
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   variants      ProductVariant[]
@@ -402,6 +422,7 @@ model Product {
 
   @@unique([tenantId, sku])
   @@index([tenantId])
+  @@index([tenantId, active, category])
   @@index([shopifyId])
 }
 

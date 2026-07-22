@@ -47,6 +47,12 @@ export default async function FeedPage() {
       </Card>
 
       <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Recent Announcements</h2>
+          <Link href="/announcements" className="text-xs font-medium text-primary hover:underline">
+            View All
+          </Link>
+        </div>
         {pinned.length > 0 && (
           <div className="flex flex-col gap-2">
             <h2 className="text-xs font-semibold uppercase text-muted-foreground">Pinned</h2>
@@ -65,11 +71,12 @@ export default async function FeedPage() {
         )}
 
         <div className="flex flex-col gap-2">
-          <h2 className="text-xs font-semibold uppercase text-muted-foreground">Recent</h2>
+          {pinned.length > 0 && <h2 className="text-xs font-semibold uppercase text-muted-foreground">Recent</h2>}
           {recent.length === 0 && pinned.length === 0 && (
             <p className="text-sm text-muted-foreground">No announcements yet.</p>
           )}
-          {recent.map((a) => (
+          {/* ponytail: keep the dashboard compact — full feed lives at /announcements */}
+          {recent.slice(0, 3).map((a) => (
             <AnnouncementCard
               key={a.id}
               id={a.id}

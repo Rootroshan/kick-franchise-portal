@@ -5,6 +5,7 @@ import {
   createAnnouncement,
   listAnnouncements,
   acknowledgeAnnouncement,
+  markAnnouncementRead,
   getAcknowledgementReport,
   getAcknowledgementSummary,
   getAnnouncementAcknowledgementUsers,
@@ -57,6 +58,21 @@ describe("Announcements: visibility, ack-once, pinned sort, scheduling", () => {
 
     const feed = await listAnnouncements(franchiseeCtx(tenant.id, location.id), tenant.id);
     expect(feed.find((a) => a.title === "Old news")).toBeUndefined();
+  });
+
+  it("saves as DRAFT when asDraft is set, and hides it from the franchisee feed", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, {
+      title: "Draft only",
+      body: "x",
+      isPinned: false,
+      requiresAck: false,
+      asDraft: true,
+    });
+    expect(created.status).toBe("DRAFT");
+
+    const feed = await listAnnouncements(franchiseeCtx(tenant.id, location.id), tenant.id);
+    expect(feed.find((a) => a.title === "Draft only")).toBeUndefined();
   });
 
   it("shows a currently-published, non-expired announcement", async () => {
@@ -287,5 +303,89 @@ describe("Announcements: visibility, ack-once, pinned sort, scheduling", () => {
 
     const crossTenantForKick = await getAnnouncementRecentActivity(kickCtx(), undefined, 10);
     expect(crossTenantForKick.length).toBeGreaterThanOrEqual(2); // KICK_ADMIN with no tenantId legitimately sees both
+  });
+
+  it("stamps publishAt with the server clock on immediate publish", async () => {
+    const { tenant } = await seedTenantWithLocation();
+    const before = new Date();
+    const created = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, {
+      title: "Now",
+      body: "x",
+      isPinned: false,
+      requiresAck: false,
+    });
+    const after = new Date();
+
+    expect(created.status).toBe("PUBLISHED");
+    expect(created.publishAt).not.toBeNull();
+    expect(created.publishAt!.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+    expect(created.publishAt!.getTime()).toBeLessThanOrEqual(after.getTime() + 1000);
+  });
+
+  it("shows a due-but-still-SCHEDULED announcement in the franchisee feed (worker-outage safety)", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, {
+      title: "Due but not flipped",
+      body: "x",
+      isPinned: false,
+      requiresAck: false,
+      publishAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    // Simulate the cron being down: publishAt passes but status stays SCHEDULED.
+    await withTenant(kickCtx(), (tx) =>
+      tx.announcement.update({ where: { id: created.id }, data: { publishAt: new Date(Date.now() - 1000) } })
+    );
+
+    const feed = await listAnnouncements(franchiseeCtx(tenant.id, location.id), tenant.id);
+    expect(feed.find((a) => a.title === "Due but not flipped")).toBeDefined();
+  });
+
+  it("never shows an ARCHIVED announcement to a franchisee", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, { title: "Archived", body: "x", isPinned: false, requiresAck: false });
+    await withTenant(kickCtx(), (tx) => tx.announcement.update({ where: { id: created.id }, data: { status: "ARCHIVED" } }));
+
+    const feed = await listAnnouncements(franchiseeCtx(tenant.id, location.id), tenant.id);
+    expect(feed.find((a) => a.title === "Archived")).toBeUndefined();
+  });
+
+  it("markAnnouncementRead is idempotent — two calls produce one row", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, { title: "Read me", body: "x", isPinned: false, requiresAck: false });
+    const ctx = franchiseeCtx(tenant.id, location.id, "u-read-twice");
+
+    await markAnnouncementRead(ctx, created.id);
+    await expect(markAnnouncementRead(ctx, created.id)).resolves.not.toThrow();
+
+    const reads = await withTenant(kickCtx(), (tx) => tx.announcementRead.findMany({ where: { announcementId: created.id } }));
+    expect(reads).toHaveLength(1);
+    expect(reads[0]?.clerkUserId).toBe("u-read-twice");
+  });
+
+  it("rejects markAnnouncementRead from another tenant's user", async () => {
+    const a = await seedTenantWithLocation();
+    const b = await seedTenantWithLocation();
+    const created = await createAnnouncement(franchisorCtx(a.tenant.id), a.tenant.id, { title: "A only", body: "x", isPinned: false, requiresAck: false });
+
+    await expect(markAnnouncementRead(franchiseeCtx(b.tenant.id, b.location.id), created.id)).rejects.toThrow();
+  });
+
+  it("a read row removes the announcement from the unread set (per-user)", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    await createAnnouncement(franchisorCtx(tenant.id), tenant.id, { title: "First", body: "x", isPinned: false, requiresAck: false });
+    const second = await createAnnouncement(franchisorCtx(tenant.id), tenant.id, { title: "Second", body: "x", isPinned: false, requiresAck: false });
+    const reader = franchiseeCtx(tenant.id, location.id, "u-reader");
+
+    await markAnnouncementRead(reader, second.id);
+
+    // Same derivation the /announcements page uses: unread = no read row.
+    const feed = await listAnnouncements(reader, tenant.id);
+    const unreadTitles = feed.filter((a) => a.reads.length === 0).map((a) => a.title);
+    expect(unreadTitles).toContain("First");
+    expect(unreadTitles).not.toContain("Second");
+
+    // Read state is per-user: another user still sees both as unread.
+    const otherFeed = await listAnnouncements(franchiseeCtx(tenant.id, location.id, "u-other"), tenant.id);
+    expect(otherFeed.every((a) => a.reads.length === 0)).toBe(true);
   });
 });

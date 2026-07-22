@@ -18,7 +18,7 @@ export function AcknowledgementSummaryCard({
   announcementTitle: string;
   reportHref: string;
 }) {
-  const radius = 26;
+  const radius = 36;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - summary.percent / 100);
 
@@ -29,33 +29,46 @@ export function AcknowledgementSummaryCard({
         {announcementTitle}
       </p>
       <div className="flex items-center gap-4">
-        <svg width="64" height="64" viewBox="0 0 64 64" className="shrink-0 -rotate-90">
-          <circle cx="32" cy="32" r={radius} fill="none" strokeWidth="6" className="stroke-muted" />
-          <circle
-            cx="32"
-            cy="32"
-            r={radius}
-            fill="none"
-            strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="stroke-status-success"
-          />
-        </svg>
-        <div className="flex flex-col gap-0.5 text-sm">
-          <span className="text-lg font-bold tabular-nums">{summary.percent}%</span>
-          <span className="text-xs text-muted-foreground">
-            {summary.acknowledgedUsers} of {summary.totalEligibleUsers} acknowledged
+        <div className="relative shrink-0">
+          <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90">
+            <circle cx="44" cy="44" r={radius} fill="none" strokeWidth="7" className="stroke-muted" />
+            <circle
+              cx="44"
+              cy="44"
+              r={radius}
+              fill="none"
+              strokeWidth="7"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              className="stroke-violet-500"
+            />
+          </svg>
+          <span className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-base font-bold tabular-nums leading-none">{summary.percent}%</span>
+            <span className="text-[9px] text-muted-foreground">Acknowledged</span>
           </span>
-          <span className="text-xs text-muted-foreground">{summary.pendingUsers} pending</span>
         </div>
+        <dl className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted-foreground">Total Users</dt>
+            <dd className="font-semibold tabular-nums">{summary.totalEligibleUsers}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted-foreground">Acknowledged</dt>
+            <dd className="font-semibold tabular-nums">{summary.acknowledgedUsers}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted-foreground">Pending</dt>
+            <dd className="font-semibold tabular-nums">{summary.pendingUsers}</dd>
+          </div>
+        </dl>
       </div>
       <Link
         href={reportHref}
-        className="mt-3 inline-flex items-center text-xs font-medium text-status-info hover:underline"
+        className="mt-4 flex h-9 w-full items-center justify-center rounded-md border border-border bg-muted/50 text-xs font-medium hover:bg-muted"
       >
-        View full report →
+        View Full Report
       </Link>
     </div>
   );

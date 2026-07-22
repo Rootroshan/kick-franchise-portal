@@ -1,23 +1,23 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { requireTenantRole } from "@/server/modules/identity/guard";
-import { PageHeader } from "@/components/admin/kit";
-import { AnnouncementForm } from "@/components/franchisor/announcements/AnnouncementForm";
+import { withTenant } from "@/server/db/withTenant";
+import { AnnouncementComposer } from "@/components/announcements/AnnouncementComposer";
 import { createAnnouncementAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewAnnouncementPage() {
-  await requireTenantRole("FRANCHISOR_ADMIN")();
+  const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
+  const tenant = await withTenant(ctx, (tx) => tx.tenant.findUnique({ where: { id: ctx.tenantId }, select: { name: true } }));
+
   return (
-    <div className="max-w-2xl">
-      <Link href="/franchisor/announcements" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back to Announcements
-      </Link>
-      <PageHeader title="New Announcement" description="Publish now or schedule for later. Optionally require store acknowledgement." />
-      <div className="rounded-xl border border-border bg-card p-5">
-        <AnnouncementForm action={createAnnouncementAction} submitLabel="Create Announcement" />
-      </div>
+    <div className="mx-auto max-w-[1400px]">
+      <AnnouncementComposer
+        action={createAnnouncementAction}
+        backHref="/franchisor/announcements"
+        title="Create Announcement"
+        description="Publish an announcement immediately or schedule it for later. Important updates can also require acknowledgement from stores."
+        brandName={tenant?.name ?? "Your brand"}
+      />
     </div>
   );
 }

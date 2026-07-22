@@ -17,6 +17,7 @@ const ALL_APP_TABLES = [
   "Membership",
   "Announcement",
   "AnnouncementAck",
+  "AnnouncementRead",
   "Asset",
   "Task",
   "TaskAssignment",

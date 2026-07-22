@@ -15,7 +15,10 @@ export type AnnouncementRow = {
   publishAt: Date | null;
   expiresAt: Date | null;
   ackCount: number;
+  /** FRANCHISEE_USER memberships in the announcement's tenant — the ack denominator. */
+  eligibleCount: number;
   createdAt: Date;
+  updatedAt: Date;
 };
 
 export type AnnouncementListResult = { rows: AnnouncementRow[]; total: number };
@@ -55,6 +58,14 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
       tx.announcement.count({ where }),
     ]);
 
+    // One grouped query for the ack denominator ("234 / 280" on each card):
+    // FRANCHISEE_USER membership counts per tenant on this page — no N+1.
+    const tenantIds = [...new Set(items.map((a) => a.tenantId))];
+    const memberCounts = tenantIds.length
+      ? await tx.membership.groupBy({ by: ["tenantId"], where: { role: "FRANCHISEE_USER", tenantId: { in: tenantIds } }, _count: true })
+      : [];
+    const eligibleByTenant = new Map(memberCounts.map((m) => [m.tenantId, m._count]));
+
     const rows: AnnouncementRow[] = items.map((a) => ({
       id: a.id,
       title: a.title,
@@ -67,7 +78,9 @@ export async function listAnnouncementsAdmin(ctx: RequestContext, q: AdminListQu
       publishAt: a.publishAt,
       expiresAt: a.expiresAt,
       ackCount: a._count.acks,
+      eligibleCount: eligibleByTenant.get(a.tenantId) ?? 0,
       createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
     }));
 
     return { rows, total };
@@ -145,6 +158,8 @@ export type AnnouncementActivityRow = {
   action: string;
   label: string;
   entityId: string | null;
+  /** Title of the announcement the event refers to; null when it has been deleted. */
+  entityTitle: string | null;
   actorId: string;
   createdAt: Date;
 };
@@ -175,11 +190,21 @@ export async function getAnnouncementRecentActivity(ctx: RequestContext, tenantI
       take,
       select: { id: true, action: true, entityId: true, actorId: true, createdAt: true },
     });
+
+    // One lookup for the referenced announcements' titles (subtitle line in
+    // the Recent Activity card) — deleted announcements simply resolve null.
+    const entityIds = [...new Set(rows.map((r) => r.entityId).filter((id): id is string => !!id))];
+    const titles = entityIds.length
+      ? await tx.announcement.findMany({ where: { id: { in: entityIds } }, select: { id: true, title: true } })
+      : [];
+    const titleById = new Map(titles.map((t) => [t.id, t.title]));
+
     return rows.map((r) => ({
       id: r.id,
       action: r.action,
       label: ACTION_LABELS[r.action] ?? r.action,
       entityId: r.entityId,
+      entityTitle: r.entityId ? titleById.get(r.entityId) ?? null : null,
       actorId: r.actorId,
       createdAt: r.createdAt,
     }));

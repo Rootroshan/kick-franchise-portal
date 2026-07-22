@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -61,7 +62,7 @@ export function AssetGrid({ assets }: { assets: AssetItem[] }) {
       link.click();
       link.remove();
     } catch {
-      alert("Couldn't download this file — try again.");
+      toast.error("Couldn't download this file — try again.");
     } finally {
       setDownloadingId(null);
     }

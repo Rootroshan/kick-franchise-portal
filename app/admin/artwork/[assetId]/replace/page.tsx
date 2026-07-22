@@ -28,6 +28,7 @@ export default async function ReplaceArtworkPage({ params }: { params: { assetId
       <PageHeader title={`Replace "${asset.name}"`} description={`Uploading a new version will supersede v${asset.version}. The previous version is preserved and archived.`} />
       <UploadArtworkForm
         returnTo="/admin/artwork"
+        fixedTenantId={asset.tenantId}
         replaces={{ id: asset.id, name: asset.name, category: asset.category, type: asset.type }}
       />
     </div>

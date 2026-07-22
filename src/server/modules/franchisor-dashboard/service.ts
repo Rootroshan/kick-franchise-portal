@@ -29,8 +29,12 @@ export async function getFranchisorDashboard(
   ]);
 
   // ---- KPI percentages (current + previous) ----
-  const annReadCur = safePercent(cur.ackDone, cur.ackOpportunities);
-  const annReadPrev = safePercent(prev.ackDone, prev.ackOpportunities);
+  // Real read (opened) records — an announcement counts as "read" when a
+  // store user opened it, regardless of whether it required acknowledgement.
+  // Previously ack-based, which showed "No data yet" whenever no announcement
+  // happened to require acknowledgement.
+  const annReadCur = safePercent(cur.readDone, cur.readOpportunities);
+  const annReadPrev = safePercent(prev.readDone, prev.readOpportunities);
   const tasksCur = safePercent(cur.taskCompleted, cur.taskTotal);
   const tasksPrev = safePercent(prev.taskCompleted, prev.taskTotal);
   const onbCur = safePercent(cur.onbDone, cur.onbTotal);
@@ -53,7 +57,7 @@ export async function getFranchisorDashboard(
       raw: annReadCur,
       isPercent: true,
       trend: trend(annReadCur, annReadPrev),
-      available: cur.ackOpportunities > 0,
+      available: cur.readOpportunities > 0,
     },
     {
       key: "tasksCompleted",
@@ -88,14 +92,14 @@ export async function getFranchisorDashboard(
   const artworkEngagementCur = safePercent(cur.artworkDownloads, cur.activeStores); // downloads-per-active-store, capped 100
   const artworkEngagementPrev = safePercent(prev.artworkDownloads, prev.activeStores);
   const components = [
-    { key: "announcements", label: "Announcements Read", percent: annReadCur, available: cur.ackOpportunities > 0 },
+    { key: "announcements", label: "Announcements Read", percent: annReadCur, available: cur.readOpportunities > 0 },
     { key: "tasks", label: "Tasks Completed", percent: tasksCur, available: cur.taskTotal > 0 },
     { key: "onboarding", label: "Onboarding Progress", percent: onbCur, available: cur.onbTotal > 0 },
     { key: "artwork", label: "Artwork Engagement", percent: artworkEngagementCur, available: cur.activeStores > 0 },
   ];
   const overall = overallEngagement(components);
   const overallPrev = overallEngagement([
-    { percent: annReadPrev, available: prev.ackOpportunities > 0 },
+    { percent: annReadPrev, available: prev.readOpportunities > 0 },
     { percent: tasksPrev, available: prev.taskTotal > 0 },
     { percent: onbPrev, available: prev.onbTotal > 0 },
     { percent: artworkEngagementPrev, available: prev.activeStores > 0 },

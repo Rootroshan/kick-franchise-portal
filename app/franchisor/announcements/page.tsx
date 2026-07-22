@@ -3,12 +3,13 @@ import { requireTenantRole } from "@/server/modules/identity/guard";
 import { listFranchisorAnnouncements } from "@/server/modules/announcements/franchisorList";
 import { getAnnouncementRecentActivity, getFeaturedAckAnnouncement, getAnnouncementKpis } from "@/server/modules/announcements/admin";
 import { getAcknowledgementSummary } from "@/server/modules/announcements/service";
-import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
-import { PageHeader, Pagination, PrimaryButtonLink, EmptyState } from "@/components/admin/kit";
+import { parseListQuery, pageCount } from "@/lib/adminQuery";
+import { PageHeader, PrimaryButtonLink, EmptyState } from "@/components/admin/kit";
+import { ListFooter } from "@/components/admin/announcements/ListFooter";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { SortSelect } from "@/components/admin/SortSelect";
 import { FilterTabs } from "@/components/franchisor/shared/FilterTabs";
-import { AnnouncementListCard } from "@/components/franchisor/announcements/AnnouncementListCard";
+import { AnnouncementListSection } from "@/components/franchisor/announcements/AnnouncementListSection";
 import { OverviewCard } from "@/components/admin/announcements/OverviewCard";
 import { AcknowledgementSummaryCard } from "@/components/admin/announcements/AcknowledgementSummaryCard";
 import { PublishCalendarCard } from "@/components/admin/announcements/PublishCalendarCard";
@@ -41,6 +42,7 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
     { value: "SCHEDULED", label: "Scheduled", count: counts.SCHEDULED ?? 0 },
     { value: "DRAFT", label: "Draft", count: counts.DRAFT ?? 0 },
     { value: "EXPIRED", label: "Expired", count: counts.EXPIRED ?? 0 },
+    { value: "ARCHIVED", label: "Archived", count: counts.ARCHIVED ?? 0 },
   ];
 
   return (
@@ -57,12 +59,10 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-3">
         <section className="flex min-w-0 flex-col gap-4 xl:col-span-2">
-          <OverviewCard kpis={kpis} />
-
           <FilterTabs tabs={tabs} />
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-0 flex-1">
-              <ListToolbar searchPlaceholder="Search announcements…" />
+              <ListToolbar searchPlaceholder="Search announcements…" className="mb-0" />
             </div>
             <SortSelect options={SORT_OPTIONS} />
           </div>
@@ -73,20 +73,14 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
               description={q.search || q.status ? "Try different filters." : "Publish your first brand announcement."}
             />
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {rows.map((a) => (
-                <AnnouncementListCard key={a.id} a={a} />
-              ))}
-            </div>
+            <AnnouncementListSection rows={rows} total={total} />
           )}
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{total} announcement{total === 1 ? "" : "s"}</p>
-            <Pagination page={q.page} pageCount={pages} makeHref={(p) => buildHref("/franchisor/announcements", q.raw, { page: p })} />
-          </div>
+          <ListFooter basePath="/franchisor/announcements" raw={q.raw} page={q.page} limit={q.limit} total={total} pageCount={pages} />
         </section>
 
         <aside className="flex min-w-0 flex-col gap-4">
+          <OverviewCard kpis={kpis} />
           {ackSummary && featuredAck && (
             <AcknowledgementSummaryCard
               summary={ackSummary}

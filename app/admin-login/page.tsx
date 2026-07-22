@@ -22,7 +22,7 @@ export default async function AdminLoginPage() {
     <BrandedLoginShell
       host={host}
       role="FRANCHISOR_ADMIN"
-      heading="Sign in to Volt Studios Admin"
+      heading="Sign in to your admin portal"
       description="Manage your franchise locations, announcements, artwork, tasks and onboarding."
     />
   );

@@ -37,10 +37,13 @@ export function AnnouncementForm({
   action,
   defaultValues,
   submitLabel = "Save",
+  children,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   defaultValues?: Partial<AnnouncementFormValues>;
   submitLabel?: string;
+  /** Extra fields rendered above Title — e.g. the KICK_ADMIN brand selector. */
+  children?: React.ReactNode;
 }) {
   const [title, setTitle] = useState(defaultValues?.title ?? "");
   const [body, setBody] = useState(defaultValues?.body ?? "");
@@ -56,6 +59,8 @@ export function AnnouncementForm({
       }}
       className="flex flex-col gap-5"
     >
+      {children}
+
       <Field label="Title" htmlFor="title" required>
         <input
           id="title"

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { Loader2, Wallet } from "lucide-react";
 import { useCart } from "@/components/franchisee/CartContext";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,98 +28,167 @@ function getStripe() {
   return stripePromise;
 }
 
+function currentPeriodLabel(date = new Date()): string {
+  return `${date.getUTCFullYear()}-Q${Math.floor(date.getUTCMonth() / 3) + 1}`;
+}
+
+/**
+ * Two-step checkout: review (items, subtotal, allowance estimate) → place
+ * order → card payment when a remainder exists. All amounts shown pre-order
+ * are estimates; the server re-prices, applies ordering rules, and locks the
+ * allowance inside one transaction at POST /api/orders/checkout.
+ */
 export function CheckoutFlow() {
-  const { items, clear } = useCart();
+  const { items, clear, subtotalCents } = useCart();
   const router = useRouter();
   // Generated ONCE per checkout attempt — never regenerated on re-render, reused across retries.
   const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const startedRef = useRef(false);
+  const [placing, setPlacing] = useState(false);
 
+  // Current-period balance only — that's what checkout can actually spend.
   useEffect(() => {
-    if (startedRef.current || items.length === 0) return;
-    startedRef.current = true;
-    setLoading(true);
-    fetch("/api/orders/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: items.map((i) => ({ variantId: i.variantId, qty: i.qty })),
-        idempotencyKey: idempotencyKeyRef.current,
-      }),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Checkout failed");
-        return data as CheckoutResult;
-      })
+    const controller = new AbortController();
+    fetch("/api/allowances/me", { signal: controller.signal })
+      .then((res) => res.json())
       .then((data) => {
-        setResult(data);
-        if (!data.clientSecret) clear(); // fully covered by allowance — already PAID
+        const period = currentPeriodLabel();
+        const current = (data.balances ?? []).filter((b: { periodLabel: string }) => b.periodLabel === period);
+        setBalanceCents(current.reduce((sum: number, b: { balanceCents: number }) => sum + Math.max(0, b.balanceCents), 0));
       })
-      .catch((err) => setError(err.message || "Checkout failed"))
-      .finally(() => setLoading(false));
-    // items/clear intentionally excluded — this must run exactly once per mount, not react to cart mutations.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch(() => setBalanceCents(null));
+    return () => controller.abort();
   }, []);
+
+  async function placeOrder() {
+    if (placing) return; // repeated clicks can't double-submit
+    setPlacing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/orders/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ variantId: i.variantId, qty: i.qty })),
+          idempotencyKey: idempotencyKeyRef.current,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Checkout failed");
+      setResult(data as CheckoutResult);
+      if (!data.clientSecret) {
+        // Fully covered by allowance — already PAID. Clear and confirm.
+        clear();
+        router.push(`/checkout/success?order=${data.orderId}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
+    } finally {
+      setPlacing(false);
+    }
+  }
 
   if (items.length === 0 && !result) {
     return <p className="text-sm text-muted-foreground">Your cart is empty.</p>;
   }
 
-  if (error) {
+  // Step 2: card payment for the server-calculated remainder.
+  if (result?.clientSecret) {
     return (
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <p className="text-sm text-destructive">{error}</p>
-          <Button variant="secondary" onClick={() => router.push("/cart")}>
-            Back to cart
-          </Button>
-        </CardContent>
-      </Card>
+      <Elements stripe={getStripe()} options={{ clientSecret: result.clientSecret }}>
+        <CardPaymentStep result={result} onPaid={clear} />
+      </Elements>
     );
   }
 
-  if (loading || !result) {
-    return <p className="text-sm text-muted-foreground">Placing your order…</p>;
+  if (result) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Confirming your order…
+      </p>
+    );
   }
 
-  if (!result.clientSecret) {
-    return <PaidSuccess result={result} />;
-  }
+  // Step 1: review.
+  const estimatedApplied = balanceCents !== null ? Math.min(balanceCents, subtotalCents) : null;
+  const estimatedRemainder = estimatedApplied !== null ? subtotalCents - estimatedApplied : null;
 
   return (
-    <Elements stripe={getStripe()} options={{ clientSecret: result.clientSecret }}>
-      <CardPaymentStep result={result} onPaid={clear} />
-    </Elements>
-  );
-}
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="flex flex-col gap-2 p-4">
+          {items.map((item) => (
+            <div key={item.variantId} className="flex justify-between gap-2 text-sm">
+              <span className="min-w-0 truncate">
+                {item.productName} · {item.variantName} × {item.qty}
+              </span>
+              <span className="tabular-nums">{formatCents(item.priceCents * item.qty)}</span>
+            </div>
+          ))}
+          <div className="mt-1 flex justify-between border-t border-border pt-2 text-sm font-semibold">
+            <span>Subtotal</span>
+            <span className="tabular-nums">{formatCents(subtotalCents)}</span>
+          </div>
+        </CardContent>
+      </Card>
 
-function PaidSuccess({ result }: { result: CheckoutResult }) {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-2 p-4">
-        <p className="text-lg font-semibold">Order placed</p>
-        <p className="text-sm text-muted-foreground">Order #{result.orderId.slice(0, 8)}</p>
-        <p className="text-sm">Subtotal: {formatCents(result.subtotalCents)}</p>
-        <p className="text-sm">Allowance applied: {formatCents(result.allowanceAppliedCents)}</p>
-        <a href={`/checkout/success?order=${result.orderId}`} className={cn(buttonVariants(), "justify-center")}>
-          View confirmation
-        </a>
-      </CardContent>
-    </Card>
+      <Card>
+        <CardContent className="flex flex-col gap-1.5 p-4 text-sm">
+          <div className="flex justify-between">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Wallet className="h-4 w-4" aria-hidden="true" /> Available allowance
+            </span>
+            <span className="tabular-nums">{balanceCents !== null ? formatCents(balanceCents) : "Loading…"}</span>
+          </div>
+          {estimatedApplied !== null && (
+            <>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Allowance applied (estimate)</span>
+                <span className="tabular-nums">− {formatCents(estimatedApplied)}</span>
+              </div>
+              <div className="flex justify-between font-semibold">
+                <span>Card charge (estimate)</span>
+                <span className="tabular-nums">{formatCents(estimatedRemainder!)}</span>
+              </div>
+            </>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            Final amounts are calculated securely by the server when you place the order.
+          </p>
+        </CardContent>
+      </Card>
+
+      {error && (
+        <div className="rounded-md border border-status-error/30 bg-status-error/5 px-3 py-2 text-sm text-status-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      <Button size="lg" className="min-h-12" disabled={placing} onClick={placeOrder}>
+        {placing ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Processing your order…
+          </>
+        ) : (
+          "Place order"
+        )}
+      </Button>
+      <Button variant="secondary" disabled={placing} onClick={() => router.push("/cart")}>
+        Back to cart
+      </Button>
+    </div>
   );
 }
 
 function CardPaymentStep({ result, onPaid }: { result: CheckoutResult; onPaid: () => void }) {
   const stripe = useStripe();
   const elements = useElements();
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [paid, setPaid] = useState(false);
 
   async function confirm(e: React.FormEvent) {
     e.preventDefault();
@@ -135,37 +205,46 @@ function CardPaymentStep({ result, onPaid }: { result: CheckoutResult; onPaid: (
       setSubmitting(false);
       return;
     }
-    setPaid(true);
     onPaid();
-  }
-
-  if (paid) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col gap-2 p-4">
-          <p className="text-lg font-semibold">Payment confirmed</p>
-          <p className="text-sm text-muted-foreground">Order #{result.orderId.slice(0, 8)}</p>
-          <a href={`/checkout/success?order=${result.orderId}`} className={cn(buttonVariants(), "justify-center")}>
-            View confirmation
-          </a>
-        </CardContent>
-      </Card>
-    );
+    router.push(`/checkout/success?order=${result.orderId}`);
   }
 
   return (
     <form onSubmit={confirm} className="flex flex-col gap-4">
       <Card>
         <CardContent className="flex flex-col gap-3 p-4">
-          <p className="text-sm">Allowance applied: {formatCents(result.allowanceAppliedCents)}</p>
-          <p className="text-sm font-medium">Card charge: {formatCents(result.subtotalCents - result.allowanceAppliedCents)}</p>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="tabular-nums">{formatCents(result.subtotalCents)}</span>
+          </div>
+          <div className="flex justify-between text-sm text-muted-foreground">
+            <span>Allowance applied</span>
+            <span className="tabular-nums">− {formatCents(result.allowanceAppliedCents)}</span>
+          </div>
+          <div className="flex justify-between text-sm font-semibold">
+            <span>Card charge</span>
+            <span className="tabular-nums">{formatCents(result.subtotalCents - result.allowanceAppliedCents)}</span>
+          </div>
           <PaymentElement />
-          {paymentError && <p className="text-sm text-destructive">{paymentError}</p>}
+          {paymentError && (
+            <p className="text-sm text-status-error" role="alert">
+              {paymentError}
+            </p>
+          )}
         </CardContent>
       </Card>
-      <Button type="submit" disabled={!stripe || submitting}>
-        {submitting ? "Processing…" : "Pay now"}
+      <Button type="submit" size="lg" className="min-h-12" disabled={!stripe || submitting}>
+        {submitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> Confirming payment…
+          </>
+        ) : (
+          "Pay now"
+        )}
       </Button>
+      <a href={`/checkout/success?order=${result.orderId}`} className={cn(buttonVariants({ variant: "secondary" }), "justify-center")}>
+        View confirmation
+      </a>
     </form>
   );
 }

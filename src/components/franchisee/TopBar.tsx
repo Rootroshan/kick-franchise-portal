@@ -1,7 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Bell } from "lucide-react";
 import { LogoutButton } from "@/components/layout/LogoutButton";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 /**
  * Store User portal top bar. The bottom nav (BottomNav) already owns primary
@@ -21,15 +21,8 @@ export function TopBar({
 }) {
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-card/95 px-4 backdrop-blur">
-      <Link href="/" className="flex min-w-0 flex-1 items-center gap-2">
-        {logoUrl ? (
-          <Image src={logoUrl} alt={brandName} width={28} height={28} className="h-7 w-7 shrink-0 rounded-md object-contain" unoptimized />
-        ) : (
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-black text-primary-foreground">
-            {brandName.charAt(0).toUpperCase()}
-          </span>
-        )}
-        <span className="truncate text-sm font-semibold">{brandName}</span>
+      <Link href="/" className="flex min-w-0 flex-1 items-center" aria-label={brandName}>
+        <BrandMark name={brandName} logoUrl={logoUrl} imgClassName="h-8 max-w-[140px]" nameClassName="text-sm" />
       </Link>
 
       <Link

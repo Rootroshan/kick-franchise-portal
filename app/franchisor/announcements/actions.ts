@@ -7,6 +7,7 @@ import { requireRole, requireTenantRole } from "@/server/modules/identity/guard"
 import { withTenant } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { createAnnouncement, updateAnnouncement, getAllAnnouncementAcknowledgementUsers } from "@/server/modules/announcements/service";
+import { parseComposerForm } from "@/server/modules/announcements/schemas";
 import { HttpError } from "@/server/modules/identity/errors";
 import { csvCell } from "@/lib/csv";
 
@@ -30,16 +31,21 @@ function parseForm(formData: FormData) {
   });
 }
 
-/** Create an announcement, then redirect to its detail page. */
+/**
+ * Create an announcement from the composer. The final status is decided
+ * server-side from intent + mode (never taken from the browser):
+ * SAVE_DRAFT → DRAFT, PUBLISH+NOW → PUBLISHED, PUBLISH+SCHEDULE → SCHEDULED.
+ */
 export async function createAnnouncementAction(formData: FormData) {
   const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
-  const input = parseForm(formData);
+  const input = parseComposerForm(formData);
   const created = await createAnnouncement(ctx, ctx.tenantId, {
     title: input.title,
     body: input.body,
     isPinned: input.isPinned,
     requiresAck: input.requiresAck,
-    publishAt: input.publishAt ? new Date(input.publishAt) : null,
+    asDraft: input.intent === "SAVE_DRAFT",
+    publishAt: input.publishMode === "SCHEDULE" && input.publishAt ? new Date(input.publishAt) : null,
     expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
   });
   revalidatePath("/franchisor/announcements");
@@ -133,7 +139,7 @@ export async function bulkExportAcknowledgementCsvAction(announcementId: string,
   const rows = await getAllAnnouncementAcknowledgementUsers(ctx, announcementId, scopedTenantId);
   if (!rows.length) return { ok: false, message: "No users to export." };
 
-  const headers = ["Name", "Email", "Store", "Status", "Acknowledged At"];
+  const headers = ["Name", "Email", "Store", "Read At", "Status", "Acknowledged At"];
   const csvRows = [
     headers.join(","),
     ...rows.map((r) =>
@@ -141,6 +147,7 @@ export async function bulkExportAcknowledgementCsvAction(announcementId: string,
         csvCell(r.displayName),
         csvCell(r.email),
         csvCell(r.locationName),
+        r.readAt ? r.readAt.toISOString() : "",
         r.pending ? "Pending" : "Acknowledged",
         r.acknowledgedAt ? r.acknowledgedAt.toISOString() : "",
       ].join(",")
@@ -150,4 +157,68 @@ export async function bulkExportAcknowledgementCsvAction(announcementId: string,
   const csv = csvRows.join("\n");
   const base64 = Buffer.from(csv, "utf-8").toString("base64");
   return { ok: true, message: `${rows.length} users exported.`, csv: base64 };
+}
+
+export type BulkActionResult = { ok: boolean; message: string; partial?: boolean };
+
+async function bulkSetStatus(ids: string[], status: "EXPIRED" | "ARCHIVED", pastTense: string): Promise<BulkActionResult> {
+  if (!ids.length) return { ok: false, message: "No announcements selected." };
+  const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
+  const results: Array<{ ok: boolean }> = [];
+
+  for (const id of ids) {
+    try {
+      await withTenant(ctx, async (tx) => {
+        const a = await tx.announcement.findFirst({ where: { id, tenantId: ctx.tenantId } });
+        if (!a) throw new HttpError(404, "Announcement not found");
+        const after = await tx.announcement.update({ where: { id }, data: { status, ...(status === "EXPIRED" ? { expiresAt: new Date() } : {}) } });
+        await writeAuditLog(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, role: ctx.role, action: "announcement.status", entity: "Announcement", entityId: id, before: { status: a.status }, after: { status: after.status } });
+      });
+      results.push({ ok: true });
+    } catch {
+      results.push({ ok: false });
+    }
+  }
+
+  revalidatePath("/franchisor/announcements");
+  const ok = results.filter((r) => r.ok).length;
+  const fail = results.filter((r) => !r.ok).length;
+  if (fail === 0) return { ok: true, message: `${ok} announcement${ok === 1 ? "" : "s"} ${pastTense}.` };
+  if (ok === 0) return { ok: false, message: `Could not update ${fail} announcement${fail === 1 ? "" : "s"}.` };
+  return { ok: true, partial: true, message: `${ok} ${pastTense}, ${fail} failed.` };
+}
+
+export async function bulkExpireFranchisorAnnouncementsAction(ids: string[]): Promise<BulkActionResult> {
+  return bulkSetStatus(ids, "EXPIRED", "expired");
+}
+
+export async function bulkArchiveFranchisorAnnouncementsAction(ids: string[]): Promise<BulkActionResult> {
+  return bulkSetStatus(ids, "ARCHIVED", "archived");
+}
+
+export async function bulkPinFranchisorAnnouncementsAction(ids: string[]): Promise<BulkActionResult> {
+  if (!ids.length) return { ok: false, message: "No announcements selected." };
+  const ctx = await requireTenantRole("FRANCHISOR_ADMIN")();
+  const results: Array<{ ok: boolean }> = [];
+
+  for (const id of ids) {
+    try {
+      await withTenant(ctx, async (tx) => {
+        const a = await tx.announcement.findFirst({ where: { id, tenantId: ctx.tenantId } });
+        if (!a) throw new HttpError(404, "Announcement not found");
+        await tx.announcement.update({ where: { id }, data: { isPinned: true } });
+        await writeAuditLog(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, role: ctx.role, action: "announcement.update", entity: "Announcement", entityId: id, before: { isPinned: a.isPinned }, after: { isPinned: true } });
+      });
+      results.push({ ok: true });
+    } catch {
+      results.push({ ok: false });
+    }
+  }
+
+  revalidatePath("/franchisor/announcements");
+  const ok = results.filter((r) => r.ok).length;
+  const fail = results.filter((r) => !r.ok).length;
+  if (fail === 0) return { ok: true, message: `${ok} announcement${ok === 1 ? "" : "s"} pinned.` };
+  if (ok === 0) return { ok: false, message: `Could not pin ${fail} announcement${fail === 1 ? "" : "s"}.` };
+  return { ok: true, partial: true, message: `${ok} pinned, ${fail} failed.` };
 }

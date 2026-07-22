@@ -9,14 +9,18 @@ import type { createAnnouncementSchema, updateAnnouncementSchema } from "./schem
 /** KICK_ADMIN and FRANCHISOR_ADMIN may create/manage announcements for their tenant. */
 export async function createAnnouncement(ctx: RequestContext, tenantId: string, input: z.infer<typeof createAnnouncementSchema>) {
   const announcement = await withTenant(ctx, async (tx) => {
-    const status = input.publishAt && input.publishAt > new Date() ? "SCHEDULED" : "PUBLISHED";
+    const status = input.asDraft ? "DRAFT" : input.publishAt && input.publishAt > new Date() ? "SCHEDULED" : "PUBLISHED";
     const created = await tx.announcement.create({
       data: {
         tenantId,
         title: input.title,
         body: input.body,
         isPinned: input.isPinned,
-        publishAt: input.publishAt ?? null,
+        // Immediate publish stamps the server clock so the feed can show a
+        // real "Published <date>" and sort by publishAt consistently — a
+        // null publishAt on a PUBLISHED row sorted NULLS FIRST and rendered
+        // no date at all.
+        publishAt: input.publishAt ?? (status === "PUBLISHED" ? new Date() : null),
         expiresAt: input.expiresAt ?? null,
         requiresAck: input.requiresAck,
         status,
@@ -54,6 +58,24 @@ export async function createAnnouncement(ctx: RequestContext, tenantId: string, 
     }).catch(() => {
       // Never fail the publish because the inbox fan-out failed.
     });
+
+    // A Kick publish is news to the brand's admins too — they didn't author
+    // it, so their bell should light up. A franchisor publishing their own
+    // announcement gets no self-notification.
+    if (ctx.role === "KICK_ADMIN") {
+      await notifyTenantMembers(ctx, {
+        tenantId,
+        role: "FRANCHISOR_ADMIN",
+        category: "ANNOUNCEMENT",
+        title: `New announcement for your brand: ${announcement.title}`,
+        body: announcement.body.slice(0, 200),
+        href: `/franchisor/announcements/${announcement.id}`,
+        entity: "Announcement",
+        entityId: announcement.id,
+      }).catch(() => {
+        // Best-effort, same as above.
+      });
+    }
 
     // Push, with per-recipient email fallback — same call the scheduled-
     // publish cron job makes (worker/jobs/announcements.ts). Immediate
@@ -118,16 +140,28 @@ export async function listAnnouncements(ctx: RequestContext, tenantId: string | 
       return tx.announcement.findMany({
         where: {
           tenantId: tenantId ?? undefined,
-          status: "PUBLISHED",
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          AND: [
+            // Visible = PUBLISHED, or SCHEDULED whose publishAt has passed but
+            // the cron worker hasn't flipped yet — the live check means a
+            // worker outage can never hide a due announcement from stores.
+            { OR: [{ status: "PUBLISHED" }, { status: "SCHEDULED", publishAt: { lte: now } }] },
+            { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          ],
         },
-        include: { acks: { where: { clerkUserId: ctx.userId } } },
+        include: {
+          acks: { where: { clerkUserId: ctx.userId } },
+          // Row-level read state for the current user only — powers the
+          // Unread tab / unread dot without a second query.
+          reads: { where: { clerkUserId: ctx.userId } },
+        },
         orderBy: [{ isPinned: "desc" }, { publishAt: "desc" }, { createdAt: "desc" }],
       });
     }
     return tx.announcement.findMany({
       where: { tenantId: tenantId ?? undefined },
-      include: { acks: true },
+      // reads included here too so both branches return one shape (callers
+      // can rely on `.reads` without narrowing the union).
+      include: { acks: true, reads: true },
       orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
   });
@@ -160,6 +194,33 @@ export async function acknowledgeAnnouncement(ctx: RequestContext, announcementI
     });
 
     return ack;
+  });
+}
+
+/**
+ * [U]: marks an announcement as read (opened) for the current user.
+ * Idempotent upsert on (announcementId, clerkUserId). Mirrors
+ * acknowledgeAnnouncement's guard — same tenant + a status the franchisee
+ * feed would actually show (PUBLISHED, or SCHEDULED that is already due) —
+ * so a crafted id can never create read state on hidden/foreign rows.
+ */
+export async function markAnnouncementRead(ctx: RequestContext, announcementId: string) {
+  if (ctx.role !== "FRANCHISEE_USER") {
+    throw new HttpError(403, "Only franchisee users have announcement read state");
+  }
+  return withTenant(ctx, async (tx) => {
+    const announcement = await tx.announcement.findUnique({ where: { id: announcementId } });
+    const due = announcement?.status === "SCHEDULED" && announcement.publishAt != null && announcement.publishAt <= new Date();
+    const visible = announcement?.status === "PUBLISHED" || due;
+    if (!announcement || announcement.tenantId !== ctx.tenantId || !visible) {
+      throw new HttpError(404, "Announcement not found");
+    }
+
+    return tx.announcementRead.upsert({
+      where: { announcementId_clerkUserId: { announcementId, clerkUserId: ctx.userId } },
+      create: { announcementId, clerkUserId: ctx.userId },
+      update: {}, // already read — idempotent no-op
+    });
   });
 }
 
@@ -254,6 +315,8 @@ export type AnnouncementAckUserRow = {
   email: string | null;
   locationId: string | null;
   locationName: string | null;
+  /** When the user opened the announcement — read ≠ acknowledged. */
+  readAt: Date | null;
   acknowledgedAt: Date | null;
   pending: boolean;
 };
@@ -298,7 +361,7 @@ export async function getAnnouncementAcknowledgementUsers(
         : {}),
     };
 
-    const [members, total, acks] = await Promise.all([
+    const [members, total, acks, reads] = await Promise.all([
       tx.membership.findMany({
         where,
         select: { clerkUserId: true, displayName: true, email: true, location: { select: { id: true, name: true } } },
@@ -308,9 +371,11 @@ export async function getAnnouncementAcknowledgementUsers(
       }),
       tx.membership.count({ where }),
       tx.announcementAck.findMany({ where: { announcementId }, select: { clerkUserId: true, acknowledgedAt: true } }),
+      tx.announcementRead.findMany({ where: { announcementId }, select: { clerkUserId: true, readAt: true } }),
     ]);
 
     const ackByUser = new Map(acks.map((a) => [a.clerkUserId, a.acknowledgedAt]));
+    const readByUser = new Map(reads.map((r) => [r.clerkUserId, r.readAt]));
     const rows: AnnouncementAckUserRow[] = members.map((m) => {
       const acknowledgedAt = ackByUser.get(m.clerkUserId) ?? null;
       return {
@@ -319,6 +384,7 @@ export async function getAnnouncementAcknowledgementUsers(
         email: m.email,
         locationId: m.location?.id ?? null,
         locationName: m.location?.name ?? null,
+        readAt: readByUser.get(m.clerkUserId) ?? null,
         acknowledgedAt,
         pending: acknowledgedAt === null,
       };
@@ -341,16 +407,18 @@ export async function getAllAnnouncementAcknowledgementUsers(
     const announcement = await tx.announcement.findFirst({ where: { id: announcementId, tenantId } });
     if (!announcement) throw new HttpError(404, "Announcement not found");
 
-    const [members, acks] = await Promise.all([
+    const [members, acks, reads] = await Promise.all([
       tx.membership.findMany({
         where: { role: "FRANCHISEE_USER", tenantId },
         select: { clerkUserId: true, displayName: true, email: true, location: { select: { id: true, name: true } } },
         orderBy: { displayName: "asc" },
       }),
       tx.announcementAck.findMany({ where: { announcementId }, select: { clerkUserId: true, acknowledgedAt: true } }),
+      tx.announcementRead.findMany({ where: { announcementId }, select: { clerkUserId: true, readAt: true } }),
     ]);
 
     const ackByUser = new Map(acks.map((a) => [a.clerkUserId, a.acknowledgedAt]));
+    const readByUser = new Map(reads.map((r) => [r.clerkUserId, r.readAt]));
     return members.map((m) => {
       const acknowledgedAt = ackByUser.get(m.clerkUserId) ?? null;
       return {
@@ -359,6 +427,7 @@ export async function getAllAnnouncementAcknowledgementUsers(
         email: m.email,
         locationId: m.location?.id ?? null,
         locationName: m.location?.name ?? null,
+        readAt: readByUser.get(m.clerkUserId) ?? null,
         acknowledgedAt,
         pending: acknowledgedAt === null,
       };

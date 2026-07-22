@@ -60,6 +60,7 @@ export async function resetDatabase() {
     await tx.task.deleteMany();
     await tx.asset.deleteMany();
     await tx.announcementAck.deleteMany();
+    await tx.announcementRead.deleteMany();
     await tx.announcement.deleteMany();
     await tx.pushSubscription.deleteMany();
     await tx.processedStripeEvent.deleteMany();

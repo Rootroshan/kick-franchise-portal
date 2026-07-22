@@ -10,7 +10,15 @@ import type { createProductSchema, updateProductSchema, createVariantSchema, upd
 export async function createProduct(ctx: RequestContext, tenantId: string, input: z.infer<typeof createProductSchema>) {
   return withTenant(ctx, async (tx) => {
     const product = await tx.product.create({
-      data: { tenantId, name: input.name, sku: input.sku, active: input.active },
+      data: {
+        tenantId,
+        name: input.name,
+        sku: input.sku,
+        category: input.category ?? null,
+        description: input.description ?? null,
+        imageUrl: input.imageUrl ?? null,
+        active: input.active,
+      },
     });
     await writeAuditLog(tx, {
       tenantId,
@@ -103,15 +111,65 @@ export async function updateVariant(ctx: RequestContext, variantId: string, inpu
   });
 }
 
-/** Franchisee-facing catalog: only active products/variants in their own tenant. RLS also enforces this independently. */
-export async function getCatalogForLocation(ctx: RequestContext, tenantId: string) {
+export type CatalogQuery = {
+  /** Matches product name, SKU, or category (case-insensitive contains). */
+  q?: string;
+  category?: string;
+};
+
+/**
+ * Franchisee-facing catalog: only active products with at least one active
+ * variant in the caller's own tenant. RLS also enforces the tenant scope
+ * independently. Admin-only fields (shopifyId, updatedAt) are never selected.
+ */
+export async function getCatalogForLocation(ctx: RequestContext, tenantId: string, query: CatalogQuery = {}) {
+  const q = query.q?.trim();
   return withTenant(ctx, (tx) =>
     tx.product.findMany({
-      where: { tenantId, active: true },
-      include: { variants: { where: { active: true } } },
+      where: {
+        tenantId,
+        active: true,
+        variants: { some: { active: true } },
+        ...(query.category ? { category: query.category } : {}),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { sku: { contains: q, mode: "insensitive" } },
+                { category: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        category: true,
+        description: true,
+        imageUrl: true,
+        createdAt: true,
+        variants: {
+          where: { active: true },
+          orderBy: { priceCents: "asc" },
+          select: { id: true, name: true, priceCents: true, currency: true, stock: true },
+        },
+      },
       orderBy: { name: "asc" },
     })
   );
+}
+
+/** Per-category product counts for the caller's tenant (active, orderable products only). */
+export async function getCatalogCategoryCounts(ctx: RequestContext, tenantId: string) {
+  return withTenant(ctx, async (tx) => {
+    const groups = await tx.product.groupBy({
+      by: ["category"],
+      where: { tenantId, active: true, variants: { some: { active: true } } },
+      _count: { _all: true },
+    });
+    return groups.map((g) => ({ category: g.category, count: g._count._all }));
+  });
 }
 
 export type PrismaTx = Prisma.TransactionClient;

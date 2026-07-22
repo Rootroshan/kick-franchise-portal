@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { requireRole } from "@/server/modules/identity/guard";
 import {
   listAnnouncementsAdmin,
@@ -7,11 +9,13 @@ import {
 } from "@/server/modules/announcements/admin";
 import { getAcknowledgementSummary } from "@/server/modules/announcements/service";
 import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
-import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
-import { PageHeader, Pagination } from "@/components/admin/kit";
+import { parseListQuery, pageCount } from "@/lib/adminQuery";
+import { PageHeader } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { SortSelect } from "@/components/admin/SortSelect";
+import { FilterTabs } from "@/components/franchisor/shared/FilterTabs";
 import { AnnouncementListSection } from "@/components/admin/announcements/AnnouncementListSection";
+import { ListFooter } from "@/components/admin/announcements/ListFooter";
 import { OverviewCard } from "@/components/admin/announcements/OverviewCard";
 import { AcknowledgementSummaryCard } from "@/components/admin/announcements/AcknowledgementSummaryCard";
 import { PublishCalendarCard } from "@/components/admin/announcements/PublishCalendarCard";
@@ -24,6 +28,15 @@ const SORT_OPTIONS = [
   { value: "oldest", label: "Oldest First", sort: "createdAt", direction: "asc" as const },
   { value: "title-asc", label: "Title A–Z", sort: "title", direction: "asc" as const },
   { value: "publish-desc", label: "Publish Date", sort: "publishAt", direction: "desc" as const },
+];
+
+const STATUS_TABS = [
+  { value: "", label: "All" },
+  { value: "DRAFT", label: "Draft" },
+  { value: "SCHEDULED", label: "Scheduled" },
+  { value: "PUBLISHED", label: "Published" },
+  { value: "EXPIRED", label: "Expired" },
+  { value: "ARCHIVED", label: "Archived" },
 ];
 
 export default async function AnnouncementsPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
@@ -41,29 +54,29 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
 
   return (
     <div>
-      <PageHeader title="Announcements" description="Every announcement across all brands, with acknowledgement tracking." />
+      <PageHeader
+        title="Announcements"
+        description="Create, manage and publish important updates for your franchise network."
+        action={
+          <Link
+            href="/admin/announcements/new"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" /> Create Announcement
+          </Link>
+        }
+      />
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-3">
         <section className="flex min-w-0 flex-col gap-4 xl:col-span-2">
-          <OverviewCard kpis={kpis} />
+          <FilterTabs tabs={STATUS_TABS} />
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-0 flex-1">
               <ListToolbar
                 searchPlaceholder="Search announcements…"
-                filters={[
-                  { key: "brand", label: "Brand", options: brandOptions },
-                  {
-                    key: "status",
-                    label: "Status",
-                    options: [
-                      { value: "DRAFT", label: "Draft" },
-                      { value: "SCHEDULED", label: "Scheduled" },
-                      { value: "PUBLISHED", label: "Published" },
-                      { value: "EXPIRED", label: "Expired" },
-                    ],
-                  },
-                ]}
+                filters={[{ key: "brand", label: "Brand", options: brandOptions }]}
+                className="mb-0"
               />
             </div>
             <SortSelect options={SORT_OPTIONS} />
@@ -77,13 +90,11 @@ export default async function AnnouncementsPage({ searchParams }: { searchParams
             <AnnouncementListSection rows={rows} total={total} />
           )}
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{total} announcement{total === 1 ? "" : "s"} total</p>
-            <Pagination page={q.page} pageCount={pages} makeHref={(p) => buildHref("/admin/announcements", q.raw, { page: p })} />
-          </div>
+          <ListFooter basePath="/admin/announcements" raw={q.raw} page={q.page} limit={q.limit} total={total} pageCount={pages} />
         </section>
 
         <aside className="flex min-w-0 flex-col gap-4">
+          <OverviewCard kpis={kpis} />
           {ackSummary && featuredAck && (
             <AcknowledgementSummaryCard
               summary={ackSummary}
