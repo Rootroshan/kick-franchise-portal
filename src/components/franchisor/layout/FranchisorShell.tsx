@@ -134,32 +134,40 @@ export function FranchisorShell({
             <Menu className="h-5 w-5" />
           </button>
 
-          <div className="hidden max-w-md flex-1 sm:block">
+          <div className="max-w-md flex-1 sm:block hidden">
             <FranchisorSearch />
           </div>
           <div className="flex-1 sm:hidden" />
 
-          <Link
-            href="/franchisor/notifications"
-            className="relative rounded-md p-2 hover:bg-muted"
-            aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount} unread)` : ""}`}
-          >
-            <Bell className="h-5 w-5" />
-            {notificationCount > 0 && (
-              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-error px-1 text-[10px] font-bold text-white">
-                {notificationCount}
-              </span>
-            )}
-          </Link>
+          {/* ml-auto pins the bell/user/logout cluster to the true right edge —
+              the search box caps at max-w-md, so on wide viewports its flex-1
+              wrapper leaves real empty space that must be explicitly closed
+              rather than relying on the search alone to push this flush right. */}
+          <div className="ml-auto flex items-center gap-3">
+            <Link
+              href="/franchisor/notifications"
+              className="relative rounded-md p-2 hover:bg-muted"
+              aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount} unread)` : ""}`}
+            >
+              <Bell className="h-5 w-5" />
+              {notificationCount > 0 && (
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-error px-1 text-[10px] font-bold text-white">
+                  {notificationCount}
+                </span>
+              )}
+            </Link>
 
-          <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-2 rounded-md p-1.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                {initials || "FA"}
+            <div className="h-6 w-px bg-border" aria-hidden="true" />
+
+            <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-2 rounded-md p-1.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  {initials || "FA"}
+                </span>
+                <span className="hidden text-sm font-medium sm:block">{userName}</span>
               </span>
-              <span className="hidden text-sm font-medium sm:block">{userName}</span>
-            </span>
-            <LogoutButton variant="icon" />
+              <LogoutButton variant="icon" />
+            </div>
           </div>
         </header>
 
