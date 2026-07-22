@@ -10,6 +10,7 @@ import {
   getRecentOrderActivity,
 } from "@/server/modules/commerce/storeOrders";
 import { markOrderProcessing, markOrderShipped, markOrderDelivered, cancelOrder } from "@/server/modules/commerce/fulfilment";
+import { refundOrder } from "@/server/modules/commerce/orderLifecycle";
 import { orderRef, trackingUrl, DISPLAY_STATUS } from "@/lib/orderStatus";
 import { kickCtx, franchiseeCtx, resetDatabase, seedTenantWithLocation } from "../helpers/db";
 
@@ -214,6 +215,35 @@ describe("Store order history", () => {
       })
     );
     await expect(cancelOrder(kickCtx(), cardOrder.id)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("partial refund credits back only the refunded portion, leaves status PARTIALLY_REFUNDED, and a second partial refund clamps to what's left", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const { variant } = await seedCatalog(tenant.id);
+    const allowance = await grantAllowance(tenant.id, location.id, 100_000);
+    const placed = await placeOrder(tenant.id, location.id, variant.id, 2); // 2x @ 5000 = 10000 subtotal, fully allowance-covered
+
+    const firstRefund = await refundOrder(placed.orderId, 4000);
+    expect(firstRefund.status).toBe("PARTIALLY_REFUNDED");
+    expect(firstRefund.refundedCents).toBe(4000);
+    expect(firstRefund.refundedAt).toBeNull(); // only stamped on a FULL refund
+
+    // A second partial refund for the remaining 6000 completes the refund.
+    const secondRefund = await refundOrder(placed.orderId, 6000);
+    expect(secondRefund.status).toBe("REFUNDED");
+    expect(secondRefund.refundedCents).toBe(10_000);
+    expect(secondRefund.refundedAt).not.toBeNull();
+
+    // Requesting MORE than what's left clamps rather than over-crediting.
+    const overRefund = await refundOrder(placed.orderId, 5000);
+    expect(overRefund.refundedCents).toBe(10_000); // unchanged — nothing left to refund
+
+    // Ledger shows the original debit plus two compensating credits summing
+    // back to zero net effect on the allowance — never edits the debit row.
+    const ledger = await withTenant(kickCtx(), (tx) =>
+      tx.allowanceLedger.findMany({ where: { allowanceId: allowance.id }, orderBy: { createdAt: "asc" } })
+    );
+    expect(ledger.map((l) => l.deltaCents)).toEqual([-10_000, 4000, 6000]);
   });
 
   it("reorder revalidates against the CURRENT catalog and prices", async () => {

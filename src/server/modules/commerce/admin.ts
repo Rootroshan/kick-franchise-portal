@@ -77,6 +77,7 @@ const STATUS_VALUES = new Set(Object.values(OrderStatus) as string[]);
 
 export type OrderRow = {
   id: string;
+  orderNumber: number;
   status: string;
   subtotalCents: number;
   cardChargedCents: number;
@@ -89,13 +90,43 @@ export type OrderRow = {
 
 export type OrderListResult = { rows: OrderRow[]; total: number };
 
-/** Cross-tenant order list with search (id prefix)/status/brand/sort/pagination. KICK_ADMIN only. */
+/**
+ * Cross-tenant order list with search/status/brand/date-range/sort/pagination.
+ * KICK_ADMIN only.
+ *
+ * Search matches the customer-facing order reference ("VS-1025" or a bare
+ * "1025" → orderNumber — see src/lib/orderStatus.ts's orderRef()), a raw
+ * order id prefix (for anyone who pastes the internal uuid), or an order
+ * line's product/variant/SKU snapshot — an admin typing what's shown
+ * everywhere else in the UI must actually find the order.
+ */
 export async function listOrdersAdmin(ctx: RequestContext, q: AdminListQuery): Promise<OrderListResult> {
   return withTenant(ctx, async (tx) => {
+    const search = q.search.trim();
+    const numeric = parseInt(search.replace(/^[A-Za-z]{1,3}-/, ""), 10);
     const where = {
-      ...(q.search ? { id: { startsWith: q.search } } : {}),
+      ...(search
+        ? {
+            OR: [
+              { id: { startsWith: search } },
+              ...(Number.isFinite(numeric) ? [{ orderNumber: numeric }] : []),
+              {
+                lines: {
+                  some: {
+                    OR: [
+                      { productName: { contains: search, mode: "insensitive" as const } },
+                      { sku: { contains: search, mode: "insensitive" as const } },
+                      { variantName: { contains: search, mode: "insensitive" as const } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
       ...(q.status && STATUS_VALUES.has(q.status) ? { status: q.status as OrderStatus } : {}),
       ...(q.brand ? { tenant: { slug: q.brand } } : {}),
+      ...(q.from || q.to ? { createdAt: { ...(q.from ? { gte: new Date(q.from) } : {}), ...(q.to ? { lte: new Date(q.to) } : {}) } } : {}),
     };
 
     const orderBy = q.sort === "total" ? { subtotalCents: q.direction } : q.sort === "status" ? { status: q.direction } : { createdAt: q.direction };
@@ -113,6 +144,7 @@ export async function listOrdersAdmin(ctx: RequestContext, q: AdminListQuery): P
 
     const rows: OrderRow[] = orders.map((o) => ({
       id: o.id,
+      orderNumber: o.orderNumber,
       status: o.status,
       subtotalCents: o.subtotalCents,
       cardChargedCents: o.cardChargedCents,

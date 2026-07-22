@@ -57,4 +57,75 @@ describe("Money suite: ordering rules cadence", () => {
       )
     ).rejects.toMatchObject({ code: "ORDERING_RULE_CADENCE" });
   });
+
+  it("rejects a quantity below the configured minimum", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const product = await withTenant(kickCtx(), (tx) =>
+      tx.product.create({ data: { tenantId: tenant.id, name: "Min Qty Widget", sku: `MIN-${Date.now()}` } })
+    );
+    const variant = await withTenant(kickCtx(), (tx) =>
+      tx.productVariant.create({ data: { productId: product.id, name: "Default", priceCents: 500 } })
+    );
+    await withTenant(kickCtx(), (tx) =>
+      tx.locationOrderingRule.create({ data: { locationId: location.id, productId: product.id, minQty: 5 } })
+    );
+
+    await expect(
+      withTenant(kickCtx(), (tx) =>
+        assertOrderingRulesSatisfied(tx, location.id, [{ variantId: variant.id, productId: product.id, qty: 2 }])
+      )
+    ).rejects.toMatchObject({ code: "ORDERING_RULE_MIN" });
+
+    // At or above the minimum, the same rule passes.
+    await expect(
+      withTenant(kickCtx(), (tx) =>
+        assertOrderingRulesSatisfied(tx, location.id, [{ variantId: variant.id, productId: product.id, qty: 5 }])
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a quantity above the configured maximum", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const product = await withTenant(kickCtx(), (tx) =>
+      tx.product.create({ data: { tenantId: tenant.id, name: "Max Qty Widget", sku: `MAX-${Date.now()}` } })
+    );
+    const variant = await withTenant(kickCtx(), (tx) =>
+      tx.productVariant.create({ data: { productId: product.id, name: "Default", priceCents: 500 } })
+    );
+    await withTenant(kickCtx(), (tx) =>
+      tx.locationOrderingRule.create({ data: { locationId: location.id, productId: product.id, maxQty: 10 } })
+    );
+
+    await expect(
+      withTenant(kickCtx(), (tx) =>
+        assertOrderingRulesSatisfied(tx, location.id, [{ variantId: variant.id, productId: product.id, qty: 11 }])
+      )
+    ).rejects.toMatchObject({ code: "ORDERING_RULE_MAX" });
+
+    // At or below the maximum, the same rule passes.
+    await expect(
+      withTenant(kickCtx(), (tx) =>
+        assertOrderingRulesSatisfied(tx, location.id, [{ variantId: variant.id, productId: product.id, qty: 10 }])
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("a global rule (productId: null) applies to every product at the location", async () => {
+    const { tenant, location } = await seedTenantWithLocation();
+    const product = await withTenant(kickCtx(), (tx) =>
+      tx.product.create({ data: { tenantId: tenant.id, name: "Any Widget", sku: `GLOBAL-${Date.now()}` } })
+    );
+    const variant = await withTenant(kickCtx(), (tx) =>
+      tx.productVariant.create({ data: { productId: product.id, name: "Default", priceCents: 500 } })
+    );
+    await withTenant(kickCtx(), (tx) =>
+      tx.locationOrderingRule.create({ data: { locationId: location.id, productId: null, maxQty: 3 } })
+    );
+
+    await expect(
+      withTenant(kickCtx(), (tx) =>
+        assertOrderingRulesSatisfied(tx, location.id, [{ variantId: variant.id, productId: product.id, qty: 4 }])
+      )
+    ).rejects.toMatchObject({ code: "ORDERING_RULE_MAX" });
+  });
 });

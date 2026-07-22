@@ -2,6 +2,7 @@ import { withTenant, type RequestContext } from "@/server/db/withTenant";
 import { writeAuditLog } from "@/server/modules/identity/audit";
 import { HttpError } from "@/server/modules/identity/errors";
 import { computeAllowanceBalance, appendLedgerCredit } from "./ledger";
+import { balanceOf } from "./listView";
 import type { z } from "zod";
 import type { grantAllowanceSchema, adjustAllowanceSchema } from "./schemas";
 
@@ -98,17 +99,20 @@ export async function getOwnAllowanceBalance(ctx: RequestContext) {
     throw new HttpError(403, "Forbidden");
   }
   return withTenant(ctx, async (tx) => {
-    const allowances = await tx.allowance.findMany({ where: { locationId: ctx.locationId! } });
-    const balances = await Promise.all(
-      allowances.map(async (a) => ({
-        allowanceId: a.id,
-        periodLabel: a.periodLabel,
-        grantedCents: a.grantedCents,
-        currency: a.currency,
-        balanceCents: await computeAllowanceBalance(tx, a.id),
-      }))
-    );
-    return balances;
+    // One query for the allowances + their ledgers, balance derived in-memory
+    // (balanceOf) — this endpoint is hit on every cart/checkout page load, so
+    // a per-allowance computeAllowanceBalance() query here was a real N+1.
+    const allowances = await tx.allowance.findMany({
+      where: { locationId: ctx.locationId! },
+      include: { ledger: { select: { deltaCents: true } } },
+    });
+    return allowances.map((a) => ({
+      allowanceId: a.id,
+      periodLabel: a.periodLabel,
+      grantedCents: a.grantedCents,
+      currency: a.currency,
+      balanceCents: balanceOf(a.grantedCents, a.ledger),
+    }));
   });
 }
 

@@ -4,17 +4,20 @@ import { listOrdersAdmin, getOrderKpis } from "@/server/modules/commerce/admin";
 import { getBrandFilterOptions } from "@/server/modules/tenants/stores";
 import { parseListQuery, buildHref, pageCount } from "@/lib/adminQuery";
 import { formatCents } from "@/lib/utils";
+import { orderRef } from "@/lib/orderStatus";
 import { PageHeader, KPIStatCard, StatusBadge, Pagination } from "@/components/admin/kit";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { DataTableSection } from "@/components/admin/DataTableSection";
 import type { OrderRow } from "@/server/modules/commerce/admin";
 import type { BulkActionDef } from "@/components/admin/bulk/BulkActionToolbar";
 import { bulkCancelOrdersAction } from "./orderActions";
+import { ordersExportAction } from "@/components/admin/orders/OrdersExportAction";
 import { XCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 const ORDER_ACTIONS: BulkActionDef[] = [
+  ordersExportAction,
   {
     key: "cancel",
     label: "Cancel",
@@ -37,7 +40,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Recor
   const pages = pageCount(total, q.limit);
 
   const columns = [
-    { key: "id", header: "Order", cell: (o: OrderRow) => <span className="font-mono text-xs">{o.id.slice(0, 8)}</span> },
+    { key: "id", header: "Order", cell: (o: OrderRow) => <span className="font-mono text-xs">{orderRef(o.brandName, o.orderNumber)}</span> },
     {
       key: "store",
       header: "Store",
@@ -67,7 +70,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Recor
       </div>
 
       <ListToolbar
-        searchPlaceholder="Search by order ID…"
+        searchPlaceholder="Search by order number, product, or SKU…"
+        dateRange
         filters={[
           { key: "brand", label: "Brand", options: brandOptions },
           {
@@ -76,6 +80,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Recor
             options: [
               { value: "PENDING", label: "Pending" },
               { value: "PAID", label: "Paid" },
+              { value: "PROCESSING", label: "Processing" },
+              { value: "SHIPPED", label: "Shipped" },
+              { value: "DELIVERED", label: "Delivered" },
               { value: "FULFILLED", label: "Fulfilled" },
               { value: "REFUNDED", label: "Refunded" },
               { value: "PARTIALLY_REFUNDED", label: "Partially Refunded" },

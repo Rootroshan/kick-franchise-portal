@@ -8,18 +8,22 @@ import { cn } from "@/lib/utils";
 export type FilterDef = { key: string; label: string; options: Array<{ value: string; label: string }> };
 
 /**
- * URL-driven list toolbar: search box + filter dropdowns. Every change writes
- * to the query string (?search=&status=&brand=…) and resets to page 1, so the
- * server component re-fetches. No client-side data fetching.
+ * URL-driven list toolbar: search box + filter dropdowns + optional date
+ * range. Every change writes to the query string (?search=&status=&brand=…)
+ * and resets to page 1, so the server component re-fetches. No client-side
+ * data fetching.
  */
 export function ListToolbar({
   filters = [],
   searchPlaceholder = "Search…",
   className,
+  dateRange = false,
 }: {
   filters?: FilterDef[];
   searchPlaceholder?: string;
   className?: string;
+  /** Adds "From"/"To" date inputs writing to ?from=&to= (ISO date strings). */
+  dateRange?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -51,13 +55,20 @@ export function ListToolbar({
 
   // Only offer Clear when something is actually filtered — an always-visible
   // control that usually does nothing is noise.
-  const activeFilters = filters.some((f) => (params.get(f.key) ?? "") !== "") || (params.get("search") ?? "") !== "";
+  const activeFilters =
+    filters.some((f) => (params.get(f.key) ?? "") !== "") ||
+    (params.get("search") ?? "") !== "" ||
+    (dateRange && ((params.get("from") ?? "") !== "" || (params.get("to") ?? "") !== ""));
 
   const clearAll = () => {
     setSearch("");
     const next = new URLSearchParams(params.toString());
     for (const f of filters) next.delete(f.key);
     next.delete("search");
+    if (dateRange) {
+      next.delete("from");
+      next.delete("to");
+    }
     next.set("page", "1");
     router.push(`${pathname}?${next.toString()}`);
   };
@@ -89,6 +100,26 @@ export function ListToolbar({
           ))}
         </select>
       ))}
+
+      {dateRange && (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={params.get("from") ?? ""}
+            onChange={(e) => push({ from: e.target.value })}
+            aria-label="From date"
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <input
+            type="date"
+            value={params.get("to") ?? ""}
+            onChange={(e) => push({ to: e.target.value })}
+            aria-label="To date"
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      )}
 
       {activeFilters && (
         <button
