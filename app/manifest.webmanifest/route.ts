@@ -21,9 +21,12 @@ export async function GET() {
     display: "standalone",
     background_color: "#ffffff",
     theme_color: theme.primary,
+    // Only icons/icon.svg actually exists on disk (a maskable SVG covers
+    // every size) — the previous 192/512 PNG paths referenced files that
+    // were never added, which some installers reject the whole manifest for.
     icons: [
-      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+      { src: "/icons/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "/icons/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
     ],
   };
 
